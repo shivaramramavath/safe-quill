@@ -11,8 +11,17 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useDraftStore } from '../store/useDraftStore';
-import { fetchCurrentSession, saveDraft, analyzeEmail } from '../lib/api';
+import {
+  fetchCurrentSession,
+  saveDraft,
+  analyzeEmail,
+  requestRewrite,
+  requestSubjects,
+} from '../lib/api';
 import { countWordsAndChars } from '../lib/utils';
+import { AiToolbar } from './AiToolbar';
+import { DiffModal } from './DiffModal';
+import { RewriteEmailResponse, RewriteMode } from '@safe-quill/shared';
 
 export function Editor() {
   const {
@@ -20,8 +29,6 @@ export function Editor() {
     body,
     rawHeaders,
     saveStatus,
-    undoStack,
-    redoStack,
     setSubject,
     setBody,
     setRawHeaders,
@@ -37,6 +44,11 @@ export function Editor() {
 
   const [showHeaders, setShowHeaders] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAction, setAiAction] = useState<string | undefined>();
+  const [diffModalData, setDiffModalData] = useState<RewriteEmailResponse | null>(null);
+  const [suggestedSubjects, setSuggestedSubjects] = useState<string[] | null>(null);
+
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const analyzeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const analysisAbortRef = useRef<AbortController | null>(null);
@@ -58,7 +70,6 @@ export function Editor() {
       setIsAnalyzing(true);
 
       analyzeTimeoutRef.current = setTimeout(async () => {
-        // Cancel in-flight request if user is still typing
         if (analysisAbortRef.current) {
           analysisAbortRef.current.abort();
         }
@@ -162,6 +173,51 @@ export function Editor() {
     triggerAnalysis(subject, body, val);
   };
 
+  // AI Assistant Actions
+  const handleAiRewrite = async (mode: RewriteMode) => {
+    setAiLoading(true);
+    setAiAction(mode);
+    try {
+      const res = await requestRewrite({
+        subject,
+        body,
+        mode,
+      });
+      setDiffModalData(res);
+    } catch (err: any) {
+      alert(`AI Assistant Error: ${err.message}`);
+    } finally {
+      setAiLoading(false);
+      setAiAction(undefined);
+    }
+  };
+
+  const handleSuggestSubjects = async () => {
+    setAiLoading(true);
+    setAiAction('subjects');
+    try {
+      const res = await requestSubjects(body);
+      setSuggestedSubjects(res.subjects);
+    } catch (err: any) {
+      alert(`Subject Generator Error: ${err.message}`);
+    } finally {
+      setAiLoading(false);
+      setAiAction(undefined);
+    }
+  };
+
+  const handleAcceptDiff = (newBodyText: string) => {
+    let newSubjectText = subject;
+    if (diffModalData?.mode === 'safe') {
+      newSubjectText = 'Notice: Account Review Information';
+      setSubject(newSubjectText);
+    }
+
+    setBody(newBodyText);
+    triggerAutosave(newSubjectText, newBodyText, rawHeaders);
+    triggerAnalysis(newSubjectText, newBodyText, rawHeaders);
+  };
+
   // Keyboard undo/redo handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -210,8 +266,48 @@ export function Editor() {
     <div className="flex flex-col gap-4">
       {/* Editor Container */}
       <div className="rounded-lg border border-border bg-bg shadow-sm overflow-hidden focus-within:border-fg transition-colors">
-        {/* Toolbar */}
-        <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-2 text-xs">
+        {/* Top AI Action Bar */}
+        <AiToolbar
+          onRewrite={handleAiRewrite}
+          onSuggestSubjects={handleSuggestSubjects}
+          isLoading={aiLoading}
+          activeAction={aiAction}
+          hasContent={body.trim().length > 0}
+        />
+
+        {/* Suggested Subjects Pill Panel */}
+        {suggestedSubjects && (
+          <div className="border-b border-border bg-muted/30 px-4 py-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-mono text-muted-fg font-semibold uppercase text-[10px]">
+              Click to Apply Subject:
+            </span>
+            {suggestedSubjects.map((sub, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setSubject(sub);
+                  triggerAutosave(sub, body, rawHeaders);
+                  triggerAnalysis(sub, body, rawHeaders);
+                  setSuggestedSubjects(null);
+                }}
+                className="font-medium rounded border border-border bg-bg px-2 py-0.5 hover:border-fg transition-colors text-left"
+              >
+                {sub}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setSuggestedSubjects(null)}
+              className="text-[10px] text-muted-fg hover:text-fg ml-auto"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* History Toolbar */}
+        <div className="flex items-center justify-between border-b border-border bg-muted/10 px-3 py-1.5 text-xs">
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -222,10 +318,10 @@ export function Editor() {
                 triggerAnalysis(s, b, h);
               }}
               disabled={!canUndo()}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent transition-opacity"
+              className="inline-flex items-center gap-1 rounded px-2 py-0.5 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent transition-opacity"
               title="Undo (Ctrl+Z)"
             >
-              <Undo2 className="h-3.5 w-3.5" />
+              <Undo2 className="h-3 w-3" />
               <span className="hidden sm:inline">Undo</span>
             </button>
             <button
@@ -237,10 +333,10 @@ export function Editor() {
                 triggerAnalysis(s, b, h);
               }}
               disabled={!canRedo()}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent transition-opacity"
+              className="inline-flex items-center gap-1 rounded px-2 py-0.5 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent transition-opacity"
               title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
             >
-              <Redo2 className="h-3.5 w-3.5" />
+              <Redo2 className="h-3 w-3" />
               <span className="hidden sm:inline">Redo</span>
             </button>
           </div>
@@ -343,6 +439,14 @@ export function Editor() {
           </div>
         )}
       </div>
+
+      {/* Diff / Comparison Modal */}
+      <DiffModal
+        isOpen={Boolean(diffModalData)}
+        rewriteData={diffModalData}
+        onClose={() => setDiffModalData(null)}
+        onAccept={handleAcceptDiff}
+      />
     </div>
   );
 }
