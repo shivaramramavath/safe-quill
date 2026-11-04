@@ -137,7 +137,13 @@ export class BrevoMailerAdapter implements MailerPort {
       timestamp: new Date().toISOString(),
     });
 
-    if (!this.apiKey || this.apiKey === 'mock' || this.apiKey === 'sandbox') {
+    if (
+      !this.apiKey ||
+      this.apiKey === 'mock' ||
+      this.apiKey === 'sandbox' ||
+      this.apiKey.includes('placeholder') ||
+      this.apiKey.includes('your_brevo')
+    ) {
       this.logger.log(
         `[SANDBOX] Dispatching ${type} email to ${masked}. Subject: "${subject}". (Brevo API key not set or sandbox)`,
       );

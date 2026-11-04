@@ -9,6 +9,8 @@ out
 .env
 .env.local
 .env.*.local
+*.env
+**/.env*
 coverage
 __pycache__
 *.pyc

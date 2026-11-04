@@ -96,8 +96,11 @@ import { HealthController } from './interfaces/controllers/health.controller';
 import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session.interceptor';
 import { JwtAuthGuard } from './interfaces/http/guards/jwt-auth.guard';
 
-const mongoImports = process.env.MONGODB_URI
-  ? [
+const mongoImports =
+  process.env.MONGODB_URI &&
+  !process.env.MONGODB_URI.includes('<username>') &&
+  !process.env.MONGODB_URI.includes('xxxxxx')
+    ? [
       MongooseModule.forRootAsync({
         imports: [ConfigModule],
         inject: [ConfigService],
