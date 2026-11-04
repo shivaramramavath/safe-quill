@@ -130,4 +130,107 @@ describe('SafeQuill E2E Acceptance Tests', () => {
     expect(analyzeAfterRes.body.level).toBe('LOW');
     expect(analyzeAfterRes.body.score).toBeLessThan(40);
   });
+
+  it('Phase 5 Criteria: a guest clicks Save, verifies by email, and finds the same draft in their account', async () => {
+    // 1. Guest creates a draft
+    const sessionRes = await request(app.getHttpServer())
+      .get('/api/v1/session')
+      .expect(200);
+
+    const cookies = sessionRes.headers['set-cookie'] as unknown as string[];
+    const guestCookie = cookies.find((c: string) => c.startsWith(`${GUEST_COOKIE_NAME}=`));
+    expect(guestCookie).toBeDefined();
+
+    // 2. Guest types email draft
+    await request(app.getHttpServer())
+      .put('/api/v1/session/draft')
+      .set('Cookie', guestCookie!)
+      .send({
+        subject: 'Confidential Strategy Briefing 2026',
+        body: 'Please review our Q4 AI roadmap and security architecture milestones.',
+      })
+      .expect(200);
+
+    // 3. Guest requests magic link
+    const magicRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/magic-link')
+      .send({ email: 'founder@safequill.local' })
+      .expect(201);
+
+    expect(magicRes.body.success).toBe(true);
+    const magicToken = magicRes.body.token;
+    expect(magicToken).toBeDefined();
+
+    // 4. Guest verifies magic link and claims the session
+    const verifyRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/verify')
+      .set('Cookie', guestCookie!)
+      .send({ token: magicToken })
+      .expect(201);
+
+    expect(verifyRes.body.user.email).toBe('founder@safequill.local');
+    expect(verifyRes.body.claimedSessionCount).toBe(1);
+
+    const authCookies = verifyRes.headers['set-cookie'] as unknown as string[];
+    const authCookie = authCookies.find((c: string) => c.startsWith('sq_auth_token='));
+    expect(authCookie).toBeDefined();
+
+    // 5. User checks saved sessions: draft is there!
+    const savedRes = await request(app.getHttpServer())
+      .get('/api/v1/sessions/saved')
+      .set('Cookie', authCookie!)
+      .expect(200);
+
+    expect(savedRes.body).toHaveLength(1);
+    expect(savedRes.body[0].subject).toBe('Confidential Strategy Briefing 2026');
+    expect(savedRes.body[0].body).toContain('roadmap');
+    const savedSessionId = savedRes.body[0].id;
+
+    // 6. User renames session
+    const renameRes = await request(app.getHttpServer())
+      .patch(`/api/v1/sessions/saved/${savedSessionId}`)
+      .set('Cookie', authCookie!)
+      .send({ title: '2026 Security Roadmap Brief' })
+      .expect(200);
+
+    expect(renameRes.body.title).toBe('2026 Security Roadmap Brief');
+
+    // 7. Brevo Mailer: "Email me this report"
+    const reportRes = await request(app.getHttpServer())
+      .post('/api/v1/mailer/report')
+      .send({
+        recipientEmail: 'audit@safequill.local',
+        subject: 'Confidential Strategy Briefing 2026',
+        body: 'Q4 AI roadmap',
+        score: 15,
+        verdict: 'LOW',
+        cues: [],
+      })
+      .expect(201);
+
+    expect(reportRes.body.success).toBe(true);
+
+    // 8. GDPR Export
+    const exportRes = await request(app.getHttpServer())
+      .get('/api/v1/account/export')
+      .set('Cookie', authCookie!)
+      .expect(200);
+
+    expect(exportRes.body.user.email).toBe('founder@safequill.local');
+    expect(exportRes.body.sessions).toHaveLength(1);
+
+    // 9. GDPR Hard Delete
+    const deleteRes = await request(app.getHttpServer())
+      .delete('/api/v1/account')
+      .set('Cookie', authCookie!)
+      .expect(200);
+
+    expect(deleteRes.body.success).toBe(true);
+
+    // Subsequent list returns empty
+    const emptyRes = await request(app.getHttpServer())
+      .get('/api/v1/sessions/saved')
+      .set('Cookie', authCookie!)
+      .expect(401); // Unauthorized because account was deleted
+  });
 });

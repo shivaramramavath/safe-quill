@@ -15,12 +15,13 @@ import {
   fetchCurrentSession,
   saveDraft,
   analyzeEmail,
-  requestRewrite,
   requestSubjects,
+  streamRewriteEmail,
 } from '../lib/api';
 import { countWordsAndChars } from '../lib/utils';
 import { AiToolbar } from './AiToolbar';
 import { DiffModal } from './DiffModal';
+import { EditorSkeleton } from './Skeleton';
 import { RewriteEmailResponse, RewriteMode } from '@safe-quill/shared';
 
 export function Editor() {
@@ -47,6 +48,9 @@ export function Editor() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAction, setAiAction] = useState<string | undefined>();
   const [diffModalData, setDiffModalData] = useState<RewriteEmailResponse | null>(null);
+  const [isDiffOpen, setIsDiffOpen] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const [suggestedSubjects, setSuggestedSubjects] = useState<string[] | null>(null);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -173,23 +177,47 @@ export function Editor() {
     triggerAnalysis(subject, body, val);
   };
 
-  // AI Assistant Actions
+  // AI Assistant Real-Time Streaming Rewrite
   const handleAiRewrite = async (mode: RewriteMode) => {
     setAiLoading(true);
     setAiAction(mode);
-    try {
-      const res = await requestRewrite({
-        subject,
-        body,
-        mode,
-      });
-      setDiffModalData(res);
-    } catch (err: any) {
-      alert(`AI Assistant Error: ${err.message}`);
-    } finally {
-      setAiLoading(false);
-      setAiAction(undefined);
-    }
+    setStreamingText('');
+    setIsStreaming(true);
+    setIsDiffOpen(true);
+
+    // Initial placeholder so modal can show comparison context
+    setDiffModalData({
+      originalText: body,
+      rewrittenText: '',
+      explanation: 'LangGraph streaming safety check in progress...',
+      mode,
+      originalScore: 0,
+      newScore: 0,
+      originalLevel: 'LOW',
+      newLevel: 'LOW',
+      provider: 'LangGraph Stream',
+    });
+
+    await streamRewriteEmail(
+      { subject, body, mode },
+      (token) => {
+        setStreamingText((prev) => prev + token);
+      },
+      (completeData) => {
+        setDiffModalData(completeData);
+        setStreamingText(completeData.rewrittenText);
+        setIsStreaming(false);
+        setAiLoading(false);
+        setAiAction(undefined);
+      },
+      (errorMsg) => {
+        alert(`AI Streaming Error: ${errorMsg}`);
+        setIsStreaming(false);
+        setAiLoading(false);
+        setAiAction(undefined);
+        setIsDiffOpen(false);
+      },
+    );
   };
 
   const handleSuggestSubjects = async () => {
@@ -252,14 +280,7 @@ export function Editor() {
   const counts = countWordsAndChars(body);
 
   if (initialLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center rounded-lg border border-border bg-muted/10">
-        <div className="flex items-center gap-2 text-sm text-muted-fg font-mono">
-          <Loader2 className="h-4 w-4 animate-spin text-fg" />
-          <span>Restoring guest session...</span>
-        </div>
-      </div>
-    );
+    return <EditorSkeleton />;
   }
 
   return (
@@ -440,11 +461,17 @@ export function Editor() {
         )}
       </div>
 
-      {/* Diff / Comparison Modal */}
+      {/* Real-time Streaming Diff / Comparison Modal */}
       <DiffModal
-        isOpen={Boolean(diffModalData)}
+        isOpen={isDiffOpen}
         rewriteData={diffModalData}
-        onClose={() => setDiffModalData(null)}
+        streamingText={streamingText}
+        isStreaming={isStreaming}
+        onClose={() => {
+          setIsDiffOpen(false);
+          setIsStreaming(false);
+          setStreamingText('');
+        }}
         onAccept={handleAcceptDiff}
       />
     </div>

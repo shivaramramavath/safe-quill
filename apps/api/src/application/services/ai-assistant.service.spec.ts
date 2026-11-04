@@ -14,8 +14,9 @@ import { CompositeRiskScorer } from '../../domain/scoring/composite-risk.scorer'
 import { SPAM_CLASSIFIER_PORT } from '../../domain/ports/spam-classifier.port';
 import { LLM_PORT } from '../../domain/ports/llm.port';
 import { GroqAdapter } from '../../infrastructure/llm/groq.adapter';
+import { LangGraphAssistantService } from '../../infrastructure/llm/langgraph-assistant.graph';
 
-describe('AiAssistantService Safe Rewrite & Score Reduction', () => {
+describe('AiAssistantService with LangGraph Workflow & Score Reduction', () => {
   let service: AiAssistantService;
 
   beforeEach(async () => {
@@ -36,6 +37,7 @@ describe('AiAssistantService Safe Rewrite & Score Reduction', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AiAssistantService,
+        LangGraphAssistantService,
         AnalysisPipeline,
         DetectorFactory,
         CompositeRiskScorer,
@@ -66,23 +68,38 @@ describe('AiAssistantService Safe Rewrite & Score Reduction', () => {
     service = module.get<AiAssistantService>(AiAssistantService);
   });
 
-  it('Done when requirement: a spammy email is safe-rewritten and the score visibly drops', async () => {
+  it('Done when requirement: a spammy email is safe-rewritten via LangGraph and score visibly drops', async () => {
     const spamSample = {
-      subject: 'URGENT: Suspended Account',
+      subject: 'URGENT: Suspended Account Notice',
       body: 'Your account will be suspended within 24 hours. Wire funds to offshore account immediately at http://bit.ly/restore.',
       mode: 'safe' as const,
     };
 
     const response = await service.rewrite(spamSample);
 
-    // Initial score was HIGH
     expect(response.originalScore).toBeGreaterThanOrEqual(75);
     expect(response.originalLevel).toBe('HIGH');
-
-    // After Safe Rewrite: risk score visibly dropped!
     expect(response.newScore).toBeLessThan(40);
     expect(response.newLevel).toBe('LOW');
     expect(response.rewrittenText).not.toContain('http://bit.ly/restore');
-    expect(response.explanation).toContain('Safe Rewrite');
+    expect(response.provider).toContain('langgraph');
+  });
+
+  it('streams tokens through async generator', async () => {
+    const sample = {
+      subject: 'Notice',
+      body: 'Please review the project schedule when convenient.',
+      mode: 'professional' as const,
+    };
+
+    const tokens: string[] = [];
+    for await (const chunk of service.streamRewrite(sample)) {
+      if (chunk.type === 'token') {
+        tokens.push(chunk.data);
+      }
+    }
+
+    expect(tokens.length).toBeGreaterThan(0);
+    expect(tokens.join('')).toContain('Please review');
   });
 });

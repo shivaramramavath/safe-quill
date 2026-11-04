@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import { DraftState, RiskAnalysisResult } from '@safe-quill/shared';
+import {
+  DraftState,
+  RiskAnalysisResult,
+  SavedSession,
+  UserProfile,
+} from '@safe-quill/shared';
 
 interface HistoryState {
   subject: string;
@@ -19,6 +24,14 @@ interface DraftStoreState {
   analysisResult: RiskAnalysisResult | null;
   isAnalyzing: boolean;
 
+  // Phase 5 Auth & Saved Sessions State
+  currentUser: UserProfile | null;
+  savedSessions: SavedSession[];
+  isAuthModalOpen: boolean;
+  isSavedDrawerOpen: boolean;
+  isReportModalOpen: boolean;
+  isAccountModalOpen: boolean;
+
   // Actions
   setSubject: (subject: string) => void;
   setBody: (body: string) => void;
@@ -26,7 +39,14 @@ interface DraftStoreState {
   setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', time?: string) => void;
   setAnalysisResult: (result: RiskAnalysisResult | null) => void;
   setIsAnalyzing: (isAnalyzing: boolean) => void;
+  setCurrentUser: (user: UserProfile | null) => void;
+  setSavedSessions: (sessions: SavedSession[]) => void;
+  setIsAuthModalOpen: (open: boolean) => void;
+  setIsSavedDrawerOpen: (open: boolean) => void;
+  setIsReportModalOpen: (open: boolean) => void;
+  setIsAccountModalOpen: (open: boolean) => void;
   hydrateFromServer: (draft: DraftState) => void;
+  loadSavedSession: (session: SavedSession) => void;
   resetDraft: () => void;
   undo: () => void;
   redo: () => void;
@@ -47,8 +67,21 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
   analysisResult: null,
   isAnalyzing: false,
 
+  currentUser: null,
+  savedSessions: [],
+  isAuthModalOpen: false,
+  isSavedDrawerOpen: false,
+  isReportModalOpen: false,
+  isAccountModalOpen: false,
+
   setAnalysisResult: (result) => set({ analysisResult: result }),
   setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
+  setCurrentUser: (user) => set({ currentUser: user }),
+  setSavedSessions: (sessions) => set({ savedSessions: sessions }),
+  setIsAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
+  setIsSavedDrawerOpen: (open) => set({ isSavedDrawerOpen: open }),
+  setIsReportModalOpen: (open) => set({ isReportModalOpen: open }),
+  setIsAccountModalOpen: (open) => set({ isAccountModalOpen: open }),
 
   setSubject: (newSubject: string) => {
     const { subject, body, undoStack } = get();
@@ -93,6 +126,19 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
       saveStatus: 'saved',
       lastSavedAt: draft.updatedAt || null,
       undoStack: [],
+      redoStack: [],
+    });
+  },
+
+  loadSavedSession: (session: SavedSession) => {
+    const { subject, body, undoStack } = get();
+    set({
+      subject: session.subject || '',
+      body: session.body || '',
+      rawHeaders: session.rawHeaders || '',
+      saveStatus: 'saved',
+      lastSavedAt: session.updatedAt,
+      undoStack: [...undoStack.slice(-MAX_HISTORY), { subject, body }],
       redoStack: [],
     });
   },

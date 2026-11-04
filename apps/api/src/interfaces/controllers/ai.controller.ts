@@ -2,9 +2,11 @@ import {
   Body,
   Controller,
   Post,
+  Res,
   UseInterceptors,
   ValidationPipe,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   GenerateSubjectsResponse,
   GrammarCheckResponse,
@@ -31,6 +33,30 @@ export class AiController {
     dto: RewriteEmailDto,
   ): Promise<RewriteEmailResponse> {
     return this.aiService.rewrite(dto);
+  }
+
+  @Post('stream-rewrite')
+  async streamRewrite(
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    dto: RewriteEmailDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    try {
+      for await (const chunk of this.aiService.streamRewrite(dto)) {
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      }
+      res.end();
+    } catch (err: any) {
+      res.write(
+        `data: ${JSON.stringify({ type: 'error', data: err.message || 'Streaming failed' })}\n\n`,
+      );
+      res.end();
+    }
   }
 
   @Post('tone')

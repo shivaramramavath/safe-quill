@@ -1,21 +1,46 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { GuestBanner } from '../components/GuestBanner';
 import { Editor } from '../components/Editor';
 import { ScoreMeter } from '../components/ScoreMeterPreview';
 import { ExplanationsPanel } from '../components/ExplanationsPanel';
 import { ClearModal } from '../components/ClearModal';
+import { AuthModal } from '../components/AuthModal';
+import { SavedSessionsDrawer } from '../components/SavedSessionsDrawer';
+import { EmailReportModal } from '../components/EmailReportModal';
+import { AccountSettingsModal } from '../components/AccountSettingsModal';
 import { useDraftStore } from '../store/useDraftStore';
-import { clearSessionDraft } from '../lib/api';
+import { clearSessionDraft, fetchCurrentUser, fetchSavedSessions } from '../lib/api';
 import { countWordsAndChars } from '../lib/utils';
 
 export default function Home() {
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
-  const { body, analysisResult, isAnalyzing, resetDraft } = useDraftStore();
+  const {
+    body,
+    analysisResult,
+    isAnalyzing,
+    resetDraft,
+    setCurrentUser,
+    setSavedSessions,
+  } = useDraftStore();
 
   const counts = countWordsAndChars(body);
+
+  useEffect(() => {
+    // Check if user has an active authenticated session
+    fetchCurrentUser()
+      .then((data) => {
+        if (data?.user) {
+          setCurrentUser(data.user);
+          fetchSavedSessions().then((sessions) => setSavedSessions(sessions));
+        }
+      })
+      .catch(() => {
+        // Guest user
+      });
+  }, [setCurrentUser, setSavedSessions]);
 
   const handleConfirmClear = async () => {
     try {
@@ -29,7 +54,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-bg text-fg">
       {/* Guest Banner */}
-      <GuestBanner onSignInClick={() => alert('Sign-in & Account Claiming will be enabled in Phase 5!')} />
+      <GuestBanner />
 
       {/* Main Header */}
       <Header
@@ -63,7 +88,7 @@ export default function Home() {
 
       {/* Minimal Footer */}
       <footer className="w-full border-t border-border py-4 text-center text-xs font-mono text-muted-fg">
-        SafeQuill &middot; Zero raw content logging &middot; Ephemeral guest session (24h TTL)
+        SafeQuill &middot; Zero raw content logging &middot; Ephemeral guest session (24h TTL) &middot; Brevo Security Mailer
       </footer>
 
       {/* Clear Confirmation Modal */}
@@ -72,6 +97,12 @@ export default function Home() {
         onClose={() => setIsClearModalOpen(false)}
         onConfirm={handleConfirmClear}
       />
+
+      {/* Phase 5 Modals & Drawers */}
+      <AuthModal />
+      <SavedSessionsDrawer />
+      <EmailReportModal />
+      <AccountSettingsModal />
     </div>
   );
 }
