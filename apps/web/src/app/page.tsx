@@ -1,0 +1,62 @@
+'use client';
+
+import React, { useState } from 'react';
+import { Header } from '../components/Header';
+import { GuestBanner } from '../components/GuestBanner';
+import { Editor } from '../components/Editor';
+import { ScoreMeter } from '../components/ScoreMeterPreview';
+import { ClearModal } from '../components/ClearModal';
+import { useDraftStore } from '../store/useDraftStore';
+import { clearSessionDraft } from '../lib/api';
+import { countWordsAndChars } from '../lib/utils';
+
+export default function Home() {
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const { body, resetDraft } = useDraftStore();
+
+  const counts = countWordsAndChars(body);
+
+  const handleConfirmClear = async () => {
+    try {
+      await clearSessionDraft();
+      resetDraft();
+    } catch (err) {
+      console.error('Failed to clear session draft:', err);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-bg text-fg">
+      {/* Guest Banner */}
+      <GuestBanner onSignInClick={() => alert('Sign-in & Account Claiming will be enabled in Phase 5!')} />
+
+      {/* Main Header */}
+      <Header
+        onClearClick={() => setIsClearModalOpen(true)}
+        wordCount={counts.words}
+        charCount={counts.chars}
+      />
+
+      {/* Body Content */}
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8 flex flex-col gap-6">
+        {/* Risk meter preview / status */}
+        <ScoreMeter score={0} level="LOW" isAnalyzing={false} />
+
+        {/* Email Editor */}
+        <Editor />
+      </main>
+
+      {/* Minimal Footer */}
+      <footer className="w-full border-t border-border py-4 text-center text-xs font-mono text-muted-fg">
+        SafeQuill &middot; Zero raw content logging &middot; Ephemeral guest session (24h TTL)
+      </footer>
+
+      {/* Clear Confirmation Modal */}
+      <ClearModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={handleConfirmClear}
+      />
+    </div>
+  );
+}

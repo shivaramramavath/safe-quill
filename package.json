@@ -1,0 +1,18 @@
+{
+  "name": "safe-quill-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @safe-quill/shared build && pnpm --parallel dev",
+    "dev:web": "pnpm --filter @safe-quill/web dev",
+    "dev:api": "pnpm --filter @safe-quill/api start:dev",
+    "build": "pnpm --filter @safe-quill/shared build && pnpm --filter @safe-quill/api build && pnpm --filter @safe-quill/web build",
+    "test": "pnpm --filter @safe-quill/shared test && pnpm --filter @safe-quill/api test && pnpm --filter @safe-quill/web test",
+    "lint": "pnpm -r run lint"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}
