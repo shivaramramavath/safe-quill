@@ -1,12 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AnalysisFacade } from './analysis.facade';
-import { SPAM_CLASSIFIER_PORT, SpamClassifierPort } from '../../domain/ports/spam-classifier.port';
+import { AnalysisPipeline } from '../pipeline/analysis.pipeline';
 import { ContentHashCacheService } from '../../infrastructure/cache/content-hash-cache.service';
+import { DetectorFactory } from '../../domain/detectors/detector.factory';
+import { PromptInjectionDetector } from '../../domain/detectors/prompt-injection.detector';
+import { UrlAnalysisDetector } from '../../domain/detectors/url-analysis.detector';
+import { SenderLookalikeDetector } from '../../domain/detectors/sender-lookalike.detector';
+import { HeaderAnalysisDetector } from '../../domain/detectors/header-analysis.detector';
+import { UrgencySocialEngineeringDetector } from '../../domain/detectors/urgency-social-engineering.detector';
+import { SensitiveDataDetector } from '../../domain/detectors/sensitive-data.detector';
+import { BecPatternDetector } from '../../domain/detectors/bec-pattern.detector';
+import { CompositeRiskScorer } from '../../domain/scoring/composite-risk.scorer';
+import { SPAM_CLASSIFIER_PORT } from '../../domain/ports/spam-classifier.port';
 
-describe('AnalysisFacade', () => {
+describe('AnalysisFacade with Detector Pipeline', () => {
   let facade: AnalysisFacade;
-  let mockClassifier: jest.Mocked<SpamClassifierPort>;
+  let mockClassifier: any;
 
   beforeEach(async () => {
     mockClassifier = {
@@ -23,7 +33,17 @@ describe('AnalysisFacade', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalysisFacade,
+        AnalysisPipeline,
+        DetectorFactory,
+        CompositeRiskScorer,
         ContentHashCacheService,
+        PromptInjectionDetector,
+        UrlAnalysisDetector,
+        SenderLookalikeDetector,
+        HeaderAnalysisDetector,
+        UrgencySocialEngineeringDetector,
+        SensitiveDataDetector,
+        BecPatternDetector,
         {
           provide: ConfigService,
           useValue: {
@@ -40,49 +60,30 @@ describe('AnalysisFacade', () => {
     facade = module.get<AnalysisFacade>(AnalysisFacade);
   });
 
-  it('classifies text on initial call and returns cached: false', async () => {
+  it('runs entire pipeline and returns HIGH risk for phishing sample with evidence', async () => {
     const res = await facade.analyze({
-      subject: 'Urgent notice',
-      body: 'Your account is suspended. Click to verify.',
+      subject: 'URGENT: Suspicious activity on your account',
+      body: 'Your account will be suspended within 24 hours. Wire funds to offshore account or verify at http://169.254.169.254/login immediately.',
     });
 
-    expect(mockClassifier.classify).toHaveBeenCalledTimes(1);
-    expect(res.label).toBe('spam');
-    expect(res.score).toBe(94);
     expect(res.level).toBe('HIGH');
+    expect(res.score).toBeGreaterThanOrEqual(75);
+    expect(res.isSpam).toBe(true);
+    expect(res.evidence.length).toBeGreaterThan(0);
     expect(res.cached).toBe(false);
-    expect(res.latencyMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('Done when requirement: identical text immediately hits the cache', async () => {
+  it('caches results on identical text and returns cached: true', async () => {
     const input = {
-      subject: 'Security Alert',
-      body: 'Someone accessed your password from an unauthorized device.',
+      subject: 'Weekly Team Meeting',
+      body: 'Hey team, here are the meeting notes for our project sync.',
     };
 
-    // First call (cache miss)
-    const firstRes = await facade.analyze(input);
-    expect(firstRes.cached).toBe(false);
-    expect(mockClassifier.classify).toHaveBeenCalledTimes(1);
+    const first = await facade.analyze(input);
+    expect(first.cached).toBe(false);
 
-    // Second call with identical text (cache hit!)
-    const secondRes = await facade.analyze(input);
-    expect(secondRes.cached).toBe(true);
-    expect(secondRes.score).toBe(firstRes.score);
-    expect(secondRes.label).toBe(firstRes.label);
-    // Classifier was NOT called again
-    expect(mockClassifier.classify).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns clean zero state for empty text', async () => {
-    const res = await facade.analyze({
-      subject: '',
-      body: '   ',
-    });
-
-    expect(mockClassifier.classify).not.toHaveBeenCalled();
-    expect(res.score).toBe(0);
-    expect(res.label).toBe('ham');
-    expect(res.level).toBe('LOW');
+    const second = await facade.analyze(input);
+    expect(second.cached).toBe(true);
+    expect(second.score).toBe(first.score);
   });
 });

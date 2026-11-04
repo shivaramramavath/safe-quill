@@ -5,18 +5,21 @@ export interface TokenWeight {
   weight: number;
 }
 
+export interface UnderlineHighlight {
+  start: number;
+  end: number;
+  type: 'solid' | 'dashed' | 'wavy';
+  reason: string;
+  text?: string;
+}
+
 export interface RiskEvidence {
   detectorName: string;
   level: RiskLevel;
   score: number; // 0 to 100
   reason: string;
   flaggedTokens?: string[];
-  underlines?: {
-    start: number;
-    end: number;
-    type: 'solid' | 'dashed' | 'wavy';
-    reason: string;
-  }[];
+  underlines?: UnderlineHighlight[];
 }
 
 export interface SpamClassificationDto {
@@ -45,4 +48,5 @@ export interface RiskAnalysisResult {
   topTokens: TokenWeight[];
   latencyMs: number;
   cached: boolean;
+  modelVersion: string;
 }

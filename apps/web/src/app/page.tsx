@@ -5,6 +5,7 @@ import { Header } from '../components/Header';
 import { GuestBanner } from '../components/GuestBanner';
 import { Editor } from '../components/Editor';
 import { ScoreMeter } from '../components/ScoreMeterPreview';
+import { ExplanationsPanel } from '../components/ExplanationsPanel';
 import { ClearModal } from '../components/ClearModal';
 import { useDraftStore } from '../store/useDraftStore';
 import { clearSessionDraft } from '../lib/api';
@@ -48,7 +49,13 @@ export default function Home() {
           cached={analysisResult?.cached}
           modelVersion={analysisResult?.modelVersion}
           topTokens={analysisResult?.topTokens}
+          evidenceCount={analysisResult?.evidence?.length ?? 0}
         />
+
+        {/* Security Evidence & Explanations Panel */}
+        {analysisResult?.evidence && analysisResult.evidence.length > 0 && (
+          <ExplanationsPanel evidence={analysisResult.evidence} />
+        )}
 
         {/* Email Editor */}
         <Editor />

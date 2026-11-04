@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DraftState, SpamClassificationDto } from '@safe-quill/shared';
+import { DraftState, RiskAnalysisResult } from '@safe-quill/shared';
 
 interface HistoryState {
   subject: string;
@@ -16,7 +16,7 @@ interface DraftStoreState {
   redoStack: HistoryState[];
 
   // Real-time analysis state
-  analysisResult: SpamClassificationDto | null;
+  analysisResult: RiskAnalysisResult | null;
   isAnalyzing: boolean;
 
   // Actions
@@ -24,7 +24,7 @@ interface DraftStoreState {
   setBody: (body: string) => void;
   setRawHeaders: (rawHeaders: string) => void;
   setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', time?: string) => void;
-  setAnalysisResult: (result: SpamClassificationDto | null) => void;
+  setAnalysisResult: (result: RiskAnalysisResult | null) => void;
   setIsAnalyzing: (isAnalyzing: boolean) => void;
   hydrateFromServer: (draft: DraftState) => void;
   resetDraft: () => void;

@@ -12,6 +12,7 @@ interface ScoreMeterProps {
   cached?: boolean;
   modelVersion?: string;
   topTokens?: TokenWeight[];
+  evidenceCount?: number;
 }
 
 export function ScoreMeter({
@@ -22,6 +23,7 @@ export function ScoreMeter({
   cached = false,
   modelVersion = 'v1.0.0',
   topTokens = [],
+  evidenceCount = 0,
 }: ScoreMeterProps) {
   const blocks = 10;
   const filledBlocks = Math.round((score / 100) * blocks);
@@ -49,6 +51,11 @@ export function ScoreMeter({
           <span className="text-[10px] text-muted-fg font-mono border border-border rounded px-1.5 py-0.5">
             ML {modelVersion}
           </span>
+          {evidenceCount > 0 && (
+            <span className="text-[10px] font-mono border border-border rounded px-1.5 py-0.5 bg-muted">
+              {evidenceCount} Risk Evidence
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

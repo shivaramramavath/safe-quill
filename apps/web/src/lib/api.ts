@@ -54,7 +54,7 @@ export async function clearSessionDraft(): Promise<SessionResponse> {
 export async function analyzeEmail(
   data: { subject?: string; body: string; rawHeaders?: string },
   signal?: AbortSignal,
-): Promise<import('@safe-quill/shared').SpamClassificationDto> {
+): Promise<import('@safe-quill/shared').RiskAnalysisResult> {
   const res = await fetch(`${API_BASE}/api/v1/analyze`, {
     method: 'POST',
     credentials: 'include',

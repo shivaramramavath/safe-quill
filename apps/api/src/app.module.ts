@@ -10,6 +10,16 @@ import { ContentHashCacheService } from './infrastructure/cache/content-hash-cac
 import { RedactingLogger } from './infrastructure/logger/redacting-logger.service';
 import { SessionService } from './application/services/session.service';
 import { AnalysisFacade } from './application/facades/analysis.facade';
+import { AnalysisPipeline } from './application/pipeline/analysis.pipeline';
+import { DetectorFactory } from './domain/detectors/detector.factory';
+import { PromptInjectionDetector } from './domain/detectors/prompt-injection.detector';
+import { UrlAnalysisDetector } from './domain/detectors/url-analysis.detector';
+import { SenderLookalikeDetector } from './domain/detectors/sender-lookalike.detector';
+import { HeaderAnalysisDetector } from './domain/detectors/header-analysis.detector';
+import { UrgencySocialEngineeringDetector } from './domain/detectors/urgency-social-engineering.detector';
+import { SensitiveDataDetector } from './domain/detectors/sensitive-data.detector';
+import { BecPatternDetector } from './domain/detectors/bec-pattern.detector';
+import { CompositeRiskScorer } from './domain/scoring/composite-risk.scorer';
 import { SessionController } from './interfaces/controllers/session.controller';
 import { AnalysisController } from './interfaces/controllers/analysis.controller';
 import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session.interceptor';
@@ -24,7 +34,7 @@ import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session
       {
         name: 'guest-standard',
         ttl: 60000,
-        limit: 120, // 120 requests per minute per IP
+        limit: 120,
       },
     ]),
   ],
@@ -33,8 +43,21 @@ import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session
     RedactingLogger,
     SessionService,
     AnalysisFacade,
+    AnalysisPipeline,
+    DetectorFactory,
+    CompositeRiskScorer,
     ContentHashCacheService,
     GuestSessionInterceptor,
+
+    // Security Detectors (Strategies)
+    PromptInjectionDetector,
+    UrlAnalysisDetector,
+    SenderLookalikeDetector,
+    HeaderAnalysisDetector,
+    UrgencySocialEngineeringDetector,
+    SensitiveDataDetector,
+    BecPatternDetector,
+
     {
       provide: SESSION_STORE_PORT,
       useClass: RedisSessionAdapter,
@@ -51,6 +74,9 @@ import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session
   exports: [
     SessionService,
     AnalysisFacade,
+    AnalysisPipeline,
+    DetectorFactory,
+    CompositeRiskScorer,
     SESSION_STORE_PORT,
     SPAM_CLASSIFIER_PORT,
   ],
