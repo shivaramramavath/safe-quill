@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 const cookieParser = require('cookie-parser');
 import { AppModule } from './app.module';
@@ -40,7 +41,8 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT || 4000;
+  const configService = app.get(ConfigService);
+  const port = configService.get<number>('PORT') || 4000;
   await app.listen(port);
   logger.log(`SafeQuill API server running securely on port ${port}`);
 }
