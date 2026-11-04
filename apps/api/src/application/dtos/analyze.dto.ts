@@ -16,3 +16,9 @@ export class AnalyzeDto implements AnalyzeEmailRequest {
   @MaxLength(50000)
   rawHeaders?: string;
 }
+
+export class AnalyzeEmlDto {
+  @IsString()
+  @MaxLength(500000)
+  emlContent!: string;
+}

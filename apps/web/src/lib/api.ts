@@ -537,3 +537,79 @@ export async function rollbackMlModel(
 
   return res.json();
 }
+
+export async function analyzeEml(
+  emlContent: string,
+): Promise<RiskAnalysisResult & { parsedEml: any }> {
+  const res = await fetch(`${API_BASE}/api/v1/analyze/eml`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emlContent }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || 'Failed to analyze .eml file');
+  }
+
+  return res.json();
+}
+
+export async function exportTxt(data: {
+  subject: string;
+  body: string;
+  score?: number;
+  level?: string;
+}): Promise<{ format: string; filename: string; contentType: string; content: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/export/txt`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to export TXT: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function exportEml(data: {
+  subject: string;
+  body: string;
+  from?: string;
+  to?: string;
+  rawHeaders?: string;
+}): Promise<{ format: string; filename: string; contentType: string; content: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/export/eml`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to export EML: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function exportJson(
+  data: any,
+): Promise<{ format: string; filename: string; contentType: string; content: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/export/json`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to export JSON: ${res.statusText}`);
+  }
+
+  return res.json();
+}

@@ -318,4 +318,86 @@ describe('SafeQuill E2E Acceptance Tests', () => {
     expect(rollbackRes.body.success).toBe(true);
     expect(rollbackRes.body.activeVersion).toBe('v1.0.0');
   });
+
+  it('Phase 7 Criteria: .eml and attachment risk checks (double extension, type, hash), QR quishing, and export (.txt, .eml, JSON)', async () => {
+    // 1. Analyze .eml with weaponized double extension attachment and quishing cues
+    const boundary = '----=_SafeQuill_Mime_Part_999';
+    const sampleEml = [
+      'From: security@fake-bank.com',
+      'To: victim@corp.com',
+      'Subject: URGENT: Scan QR Code to Verify Account and Review Attached Invoice',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      'Please scan the QR code below with your phone camera to verify your MFA authenticator and open attached remittance.',
+      `--${boundary}`,
+      'Content-Type: application/octet-stream; name="payment_remittance.pdf.exe"',
+      'Content-Disposition: attachment; filename="payment_remittance.pdf.exe"',
+      '',
+      'FakeExecutablePayloadContentHereForTestingPurposes',
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const emlRes = await request(app.getHttpServer())
+      .post('/api/v1/analyze/eml')
+      .send({ emlContent: sampleEml })
+      .expect(201);
+
+    expect(emlRes.body.level).toBe('HIGH');
+    expect(emlRes.body.score).toBeGreaterThanOrEqual(85);
+    expect(emlRes.body.parsedEml.subject).toContain('QR Code');
+    expect(emlRes.body.parsedEml.attachments).toHaveLength(1);
+    expect(emlRes.body.parsedEml.attachments[0].filename).toBe('payment_remittance.pdf.exe');
+    expect(emlRes.body.parsedEml.attachments[0].sha256).toBeDefined();
+
+    // Verify detectors triggered
+    const evidenceNames = emlRes.body.evidence.map((e: any) => e.detectorName);
+    expect(evidenceNames).toContain('AttachmentRiskDetector');
+    expect(evidenceNames).toContain('QrPhishingDetector');
+
+    // 2. Export as .txt
+    const txtRes = await request(app.getHttpServer())
+      .post('/api/v1/export/txt')
+      .send({
+        subject: 'Executive Briefing',
+        body: 'Quarterly roadmap details.',
+        score: 15,
+        level: 'LOW',
+      })
+      .expect(201);
+
+    expect(txtRes.body.format).toBe('txt');
+    expect(txtRes.body.content).toContain('SAFEQUILL EMAIL EXPORT');
+    expect(txtRes.body.content).toContain('Verdict: LOW');
+
+    // 3. Export as .eml
+    const emlExportRes = await request(app.getHttpServer())
+      .post('/api/v1/export/eml')
+      .send({
+        subject: 'Executive Briefing',
+        body: 'Quarterly roadmap details.',
+        from: 'founder@safequill.local',
+      })
+      .expect(201);
+
+    expect(emlExportRes.body.format).toBe('eml');
+    expect(emlExportRes.body.contentType).toBe('message/rfc822');
+    expect(emlExportRes.body.content).toContain('From: founder@safequill.local');
+    expect(emlExportRes.body.content).toContain('MIME-Version: 1.0');
+
+    // 4. Export as JSON
+    const jsonRes = await request(app.getHttpServer())
+      .post('/api/v1/export/json')
+      .send({
+        audit: 'sample-audit-record',
+        score: emlRes.body.score,
+        level: emlRes.body.level,
+      })
+      .expect(201);
+
+    expect(jsonRes.body.format).toBe('json');
+    expect(JSON.parse(jsonRes.body.content).audit).toBe('sample-audit-record');
+  });
 });

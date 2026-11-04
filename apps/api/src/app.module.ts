@@ -64,6 +64,8 @@ import { SavedSessionService } from './application/services/saved-session.servic
 import { FeedbackService } from './application/services/feedback.service';
 import { AdminConfigService } from './application/services/admin-config.service';
 import { AnalyticsService } from './application/services/analytics.service';
+import { EmlParserService } from './application/services/eml-parser.service';
+import { ExportService } from './application/services/export.service';
 
 // Detectors & Scoring
 import { DetectorFactory } from './domain/detectors/detector.factory';
@@ -74,6 +76,9 @@ import { HeaderAnalysisDetector } from './domain/detectors/header-analysis.detec
 import { UrgencySocialEngineeringDetector } from './domain/detectors/urgency-social-engineering.detector';
 import { SensitiveDataDetector } from './domain/detectors/sensitive-data.detector';
 import { BecPatternDetector } from './domain/detectors/bec-pattern.detector';
+import { AttachmentRiskDetector } from './domain/detectors/attachment-risk.detector';
+import { QrPhishingDetector } from './domain/detectors/qr-phishing.detector';
+import { MultilingualDetector } from './domain/detectors/multilingual.detector';
 import { CompositeRiskScorer } from './domain/scoring/composite-risk.scorer';
 
 // Controllers, Guards & Interceptors
@@ -86,6 +91,7 @@ import { AccountController } from './interfaces/controllers/account.controller';
 import { MailerController } from './interfaces/controllers/mailer.controller';
 import { FeedbackController } from './interfaces/controllers/feedback.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
+import { ExportController } from './interfaces/controllers/export.controller';
 import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session.interceptor';
 import { JwtAuthGuard } from './interfaces/http/guards/jwt-auth.guard';
 
@@ -148,6 +154,7 @@ const mongoImports = process.env.MONGODB_URI
     MailerController,
     FeedbackController,
     AdminController,
+    ExportController,
   ],
   providers: [
     RedactingLogger,
@@ -162,6 +169,8 @@ const mongoImports = process.env.MONGODB_URI
     FeedbackService,
     AdminConfigService,
     AnalyticsService,
+    EmlParserService,
+    ExportService,
     DetectorFactory,
     CompositeRiskScorer,
     ContentHashCacheService,
@@ -176,6 +185,9 @@ const mongoImports = process.env.MONGODB_URI
     UrgencySocialEngineeringDetector,
     SensitiveDataDetector,
     BecPatternDetector,
+    AttachmentRiskDetector,
+    QrPhishingDetector,
+    MultilingualDetector,
 
     {
       provide: SESSION_STORE_PORT,
@@ -226,6 +238,8 @@ const mongoImports = process.env.MONGODB_URI
     FeedbackService,
     AdminConfigService,
     AnalyticsService,
+    EmlParserService,
+    ExportService,
     SESSION_STORE_PORT,
     SPAM_CLASSIFIER_PORT,
     LLM_PORT,

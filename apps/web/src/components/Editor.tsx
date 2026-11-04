@@ -9,12 +9,18 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Mic,
+  MicOff,
+  Upload,
+  Paperclip,
+  X,
 } from 'lucide-react';
 import { useDraftStore } from '../store/useDraftStore';
 import {
   fetchCurrentSession,
   saveDraft,
   analyzeEmail,
+  analyzeEml,
   requestSubjects,
   streamRewriteEmail,
 } from '../lib/api';
@@ -52,6 +58,14 @@ export function Editor() {
   const [streamingText, setStreamingText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [suggestedSubjects, setSuggestedSubjects] = useState<string[] | null>(null);
+
+  // Phase 7: Dictation and .eml upload states
+  const [isListening, setIsListening] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [emlLoading, setEmlLoading] = useState(false);
+  const [parsedAttachments, setParsedAttachments] = useState<any[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const analyzeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -155,6 +169,85 @@ export function Editor() {
     },
     [setSaveStatus],
   );
+
+  // Phase 7: Initialize Web Speech API for voice dictation
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((res: any) => res[0].transcript)
+            .join(' ');
+          const currentSubj = useDraftStore.getState().subject;
+          const currentHeaders = useDraftStore.getState().rawHeaders;
+          const currentBody = useDraftStore.getState().body;
+          const newBody = currentBody ? `${currentBody} ${transcript}` : transcript;
+          setBody(newBody);
+          triggerAutosave(currentSubj, newBody, currentHeaders);
+          triggerAnalysis(currentSubj, newBody, currentHeaders);
+        };
+
+        recognition.onerror = () => {
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+  }, [triggerAnalysis, triggerAutosave, setBody]);
+
+  const toggleDictation = () => {
+    if (!recognitionRef.current) {
+      alert('Speech Recognition is not supported in this browser. Please try Chrome or Edge.');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.error('Dictation error:', err);
+      }
+    }
+  };
+
+  const handleEmlUpload = async (file: File) => {
+    setEmlLoading(true);
+    try {
+      const content = await file.text();
+      const result = await analyzeEml(content);
+      if (result.parsedEml) {
+        const parsed = result.parsedEml;
+        const newSubj = parsed.subject || '';
+        const newBody = parsed.body || '';
+        const newHeaders = parsed.rawHeaders || '';
+        setSubject(newSubj);
+        setBody(newBody);
+        setRawHeaders(newHeaders);
+        setParsedAttachments(parsed.attachments || []);
+        setAnalysisResult(result);
+        triggerAutosave(newSubj, newBody, newHeaders);
+      }
+    } catch (err: any) {
+      alert(`Failed to import .eml: ${err.message}`);
+    } finally {
+      setEmlLoading(false);
+    }
+  };
 
   const handleSubjectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -285,8 +378,31 @@ export function Editor() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Editor Container */}
-      <div className="rounded-lg border border-border bg-bg shadow-sm overflow-hidden focus-within:border-fg transition-colors">
+      {/* Editor Container with Drag-and-Drop for .eml */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleEmlUpload(e.dataTransfer.files[0]);
+          }
+        }}
+        className={`rounded-lg border bg-bg shadow-sm overflow-hidden focus-within:border-fg transition-all relative ${
+          isDragOver ? 'border-dashed border-2 border-fg bg-muted/20' : 'border-border'
+        }`}
+      >
+        {isDragOver && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-bg/85 backdrop-blur-sm pointer-events-none">
+            <Upload className="h-8 w-8 text-fg animate-bounce mb-2" />
+            <p className="font-mono text-sm font-semibold text-fg">Drop RFC 822 .eml file here to parse & inspect</p>
+          </div>
+        )}
+
         {/* Top AI Action Bar */}
         <AiToolbar
           onRewrite={handleAiRewrite}
@@ -327,7 +443,7 @@ export function Editor() {
           </div>
         )}
 
-        {/* History Toolbar */}
+        {/* History & Tools Toolbar */}
         <div className="flex items-center justify-between border-b border-border bg-muted/10 px-3 py-1.5 text-xs">
           <div className="flex items-center gap-1">
             <button
@@ -360,6 +476,64 @@ export function Editor() {
               <Redo2 className="h-3 w-3" />
               <span className="hidden sm:inline">Redo</span>
             </button>
+
+            <span className="text-border mx-1">|</span>
+
+            {/* Voice Dictation (Web Speech API) */}
+            <button
+              type="button"
+              onClick={toggleDictation}
+              className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 transition-colors ${
+                isListening
+                  ? 'bg-fg text-bg font-semibold'
+                  : 'hover:bg-muted text-muted-fg hover:text-fg'
+              }`}
+              title={isListening ? 'Stop Voice Dictation' : 'Start Voice Dictation (Speech-to-Text)'}
+            >
+              {isListening ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-high opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-high"></span>
+                  </span>
+                  <MicOff className="h-3 w-3" />
+                  <span>Listening...</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="h-3 w-3" />
+                  <span className="hidden sm:inline">Dictate</span>
+                </>
+              )}
+            </button>
+
+            {/* Import .eml File */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={emlLoading}
+              className="inline-flex items-center gap-1 rounded px-2 py-0.5 hover:bg-muted disabled:opacity-30 text-muted-fg hover:text-fg transition-colors"
+              title="Upload and analyze raw RFC 822 .eml file"
+            >
+              {emlLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Upload className="h-3 w-3" />
+              )}
+              <span className="hidden sm:inline">Import .eml</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".eml,.txt,message/rfc822"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) {
+                  handleEmlUpload(e.target.files[0]);
+                  e.target.value = '';
+                }
+              }}
+            />
           </div>
 
           {/* Autosave status indicator */}
@@ -385,6 +559,37 @@ export function Editor() {
             {saveStatus === 'idle' && <span>Ready</span>}
           </div>
         </div>
+
+        {/* Phase 7: Detected Attachments Banner */}
+        {parsedAttachments.length > 0 && (
+          <div className="border-b border-border bg-muted/30 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Paperclip className="h-3.5 w-3.5 text-accent-high" />
+              <span className="font-semibold text-fg">
+                Detected MIME Attachments ({parsedAttachments.length}):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {parsedAttachments.map((att, idx) => (
+                  <span
+                    key={idx}
+                    className="font-mono text-[11px] px-1.5 py-0.5 rounded border border-border bg-bg"
+                    title={`MIME: ${att.mimeType || 'unknown'} | SHA-256: ${att.sha256}`}
+                  >
+                    {att.filename}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setParsedAttachments([])}
+              className="text-muted-fg hover:text-fg text-xs"
+              title="Dismiss attachment banner"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Subject Input */}
         <div className="border-b border-border px-4 py-3">

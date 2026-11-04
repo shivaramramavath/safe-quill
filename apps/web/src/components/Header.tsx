@@ -1,10 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Moon, Sun, Shield, RotateCcw, Bookmark, User, Mail, Send, Sliders } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Moon,
+  Sun,
+  Shield,
+  RotateCcw,
+  Bookmark,
+  User,
+  Mail,
+  Send,
+  Sliders,
+  Download,
+  FileText,
+  Code,
+  Printer,
+  ChevronDown,
+} from 'lucide-react';
 import { useTheme } from './providers';
 import { useDraftStore } from '@/store/useDraftStore';
-import { saveDraftToAccount } from '@/lib/api';
+import { saveDraftToAccount, exportTxt, exportEml, exportJson } from '@/lib/api';
 
 interface HeaderProps {
   onClearClick: () => void;
@@ -31,6 +46,91 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
 
   const [savingAccount, setSavingAccount] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    }
+    if (isExportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportMenuOpen]);
+
+  const downloadFile = (content: string, filename: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportTxt = async () => {
+    setIsExporting(true);
+    try {
+      const res = await exportTxt({
+        subject,
+        body,
+        score: analysisResult?.score,
+        level: analysisResult?.level,
+      });
+      downloadFile(res.content, res.filename, res.contentType);
+      setIsExportMenuOpen(false);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportEml = async () => {
+    setIsExporting(true);
+    try {
+      const res = await exportEml({
+        subject,
+        body,
+        from: currentUser?.email || 'guest@safequill.local',
+        rawHeaders,
+      });
+      downloadFile(res.content, res.filename, res.contentType);
+      setIsExportMenuOpen(false);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportJson = async () => {
+    setIsExporting(true);
+    try {
+      const res = await exportJson({
+        subject,
+        body,
+        rawHeaders,
+        analysisResult,
+        timestamp: new Date().toISOString(),
+      });
+      downloadFile(res.content, res.filename, res.contentType);
+      setIsExportMenuOpen(false);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleSaveClick = async () => {
     if (!currentUser) {
@@ -120,6 +220,65 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
             <Send className="h-3.5 w-3.5" />
             <span>Report</span>
           </button>
+
+          {/* Export Dropdown Menu (Phase 7) */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
+              title="Export draft or audit logs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Export</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
+
+            {isExportMenuOpen && (
+              <div className="absolute right-0 mt-1.5 w-52 border border-[var(--border)] bg-[var(--bg)] shadow-lg z-50 text-xs py-1 animate-in fade-in zoom-in-95">
+                <div className="px-3 py-1 font-mono text-[10px] uppercase text-[var(--muted)] border-b border-[var(--border)]">
+                  Export Options
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportTxt}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-[var(--bg-subtle)] text-[var(--fg)] transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Plain Text (.txt)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportEml}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-[var(--bg-subtle)] text-[var(--fg)] transition-colors"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>RFC 822 Email (.eml)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-[var(--bg-subtle)] text-[var(--fg)] transition-colors"
+                >
+                  <Code className="h-3.5 w-3.5" />
+                  <span>JSON Audit Record (.json)</span>
+                </button>
+                <div className="border-t border-[var(--border)] my-1" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    window.print();
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-[var(--bg-subtle)] text-[var(--fg)] transition-colors"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>Print Summary</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Saved Sessions Button (if signed in) */}
           {currentUser && (
