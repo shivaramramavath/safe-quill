@@ -16,6 +16,8 @@ import {
   Code,
   Printer,
   ChevronDown,
+  Settings,
+  Check,
 } from 'lucide-react';
 import { useTheme } from './providers';
 import { useDraftStore } from '@/store/useDraftStore';
@@ -23,11 +25,9 @@ import { saveDraftToAccount, exportTxt, exportEml, exportJson } from '@/lib/api'
 
 interface HeaderProps {
   onClearClick: () => void;
-  wordCount: number;
-  charCount: number;
 }
 
-export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
+export function Header({ onClearClick }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const {
     currentUser,
@@ -37,6 +37,10 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
     analysisResult,
     savedSessions,
     setSavedSessions,
+    inlineSuggestionsEnabled,
+    setInlineSuggestionsEnabled,
+    aiSuggestionsEnabled,
+    setAiSuggestionsEnabled,
     setIsAuthModalOpen,
     setIsSavedDrawerOpen,
     setIsReportModalOpen,
@@ -47,23 +51,26 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
   const [savingAccount, setSavingAccount] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
 
-  // Close export dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
         setIsExportMenuOpen(false);
       }
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
     }
-    if (isExportMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isExportMenuOpen]);
+  }, []);
 
   const downloadFile = (content: string, filename: string, mime: string) => {
     const blob = new Blob([content], { type: mime });
@@ -175,26 +182,19 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold tracking-tight text-base sm:text-lg text-[var(--fg)]">SafeQuill</span>
-              <span className="border border-[var(--border)] px-1.5 py-0.2 text-[10px] uppercase font-mono tracking-wider text-[var(--muted)]">
+              <span className="border border-current px-1.5 py-0.5 text-[10px] uppercase font-mono font-bold tracking-wider text-[var(--fg)]">
                 v0.1
               </span>
             </div>
-            <p className="hidden text-[11px] text-[var(--muted)] sm:block -mt-1">
+            <p className="hidden text-[11px] font-semibold text-[var(--fg)]/80 sm:block -mt-0.5">
               Phishing Detector & Email Security
             </p>
           </div>
         </div>
 
-        {/* Center stats */}
-        <div className="hidden md:flex items-center gap-3 text-xs font-mono text-[var(--muted)] border border-[var(--border)] px-3 py-1 bg-[var(--bg-subtle)]">
-          <span>{wordCount} words</span>
-          <span className="text-[var(--border)]">|</span>
-          <span>{charCount} chars</span>
-        </div>
-
         {/* Right actions */}
         <div className="flex items-center gap-2">
-          {/* Save Draft Button */}
+          {/* Single Sign In / Save Button (Requirement 1) */}
           <button
             type="button"
             onClick={handleSaveClick}
@@ -207,28 +207,17 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
             title={currentUser ? 'Save to your account' : 'Sign in to save this draft'}
           >
             <Bookmark className="h-3.5 w-3.5" />
-            <span>{saveSuccess ? 'Saved!' : currentUser ? 'Save' : 'Save Draft'}</span>
+            <span>{saveSuccess ? 'Saved!' : currentUser ? 'Save' : 'Sign in to save'}</span>
           </button>
 
-          {/* Email Report Button */}
-          <button
-            type="button"
-            onClick={() => setIsReportModalOpen(true)}
-            className="hidden sm:inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
-            title="Email security audit report"
-          >
-            <Send className="h-3.5 w-3.5" />
-            <span>Report</span>
-          </button>
-
-          {/* Export Dropdown Menu (Phase 7) */}
+          {/* Export Dropdown Menu with Email Option (Requirement 6) */}
           <div className="relative" ref={exportMenuRef}>
             <button
               type="button"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
               disabled={isExporting}
               className="inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
-              title="Export draft or audit logs"
+              title="Export draft or email report"
             >
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Export</span>
@@ -236,7 +225,7 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
             </button>
 
             {isExportMenuOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 border border-[var(--border)] bg-[var(--bg)] shadow-lg z-50 text-xs py-1 animate-in fade-in zoom-in-95">
+              <div className="absolute right-0 mt-1.5 w-56 border border-[var(--border)] bg-[var(--bg)] shadow-lg z-50 text-xs py-1 animate-in fade-in zoom-in-95">
                 <div className="px-3 py-1 font-mono text-[10px] uppercase text-[var(--muted)] border-b border-[var(--border)]">
                   Export Options
                 </div>
@@ -264,6 +253,17 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
                   <Code className="h-3.5 w-3.5" />
                   <span>JSON Audit Record (.json)</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    setIsReportModalOpen(true);
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-[var(--bg-subtle)] text-[var(--fg)] transition-colors"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Email me this report</span>
+                </button>
                 <div className="border-t border-[var(--border)] my-1" />
                 <button
                   type="button"
@@ -276,6 +276,55 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
                   <Printer className="h-3.5 w-3.5" />
                   <span>Print Summary</span>
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* Settings Popover (Requirement 5) */}
+          <div className="relative" ref={settingsRef}>
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen((prev) => !prev)}
+              className="flex h-8 w-8 items-center justify-center border border-[var(--border)] bg-[var(--bg)] hover:border-[var(--fg)] transition-colors text-[var(--fg)]"
+              title="Settings"
+              aria-label="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+
+            {isSettingsOpen && (
+              <div className="absolute right-0 mt-1.5 w-60 border border-[var(--border)] bg-[var(--bg)] shadow-lg z-50 p-3 text-xs animate-in fade-in zoom-in-95 font-sans">
+                <div className="font-mono text-[10px] uppercase font-bold text-muted-fg mb-2">
+                  Settings
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-t border-[var(--border)]">
+                  <span className="font-medium text-xs">Inline suggestions</span>
+                  <button
+                    type="button"
+                    onClick={() => setInlineSuggestionsEnabled(!inlineSuggestionsEnabled)}
+                    className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border transition-colors ${
+                      inlineSuggestionsEnabled
+                        ? 'border-fg bg-fg text-bg'
+                        : 'border-border bg-bg text-muted-fg'
+                    }`}
+                  >
+                    {inlineSuggestionsEnabled ? 'On' : 'Off'}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-t border-[var(--border)]">
+                  <span className="font-medium text-xs">AI suggestions (Groq)</span>
+                  <button
+                    type="button"
+                    onClick={() => setAiSuggestionsEnabled(!aiSuggestionsEnabled)}
+                    className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border transition-colors ${
+                      aiSuggestionsEnabled
+                        ? 'border-fg bg-fg text-bg'
+                        : 'border-border bg-bg text-muted-fg'
+                    }`}
+                  >
+                    {aiSuggestionsEnabled ? 'On' : 'Off'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -298,8 +347,8 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
             </button>
           )}
 
-          {/* User Account / Sign In */}
-          {currentUser ? (
+          {/* User Account Pill (when signed in) */}
+          {currentUser && (
             <button
               type="button"
               onClick={() => setIsAccountModalOpen(true)}
@@ -309,26 +358,20 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
               <User className="h-3.5 w-3.5" />
               <span className="hidden md:inline max-w-[100px] truncate">{currentUser.email}</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsAuthModalOpen(true)}
-              className="inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-semibold text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
-            >
-              Sign In
-            </button>
           )}
 
-          {/* Admin Dashboard */}
-          <button
-            type="button"
-            onClick={() => setIsAdminModalOpen(true)}
-            className="inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
-            title="Admin & MLOps Dashboard"
-          >
-            <Sliders className="h-3.5 w-3.5" />
-            <span className="hidden lg:inline">Admin</span>
-          </button>
+          {/* Admin Dashboard (admin role only) */}
+          {currentUser?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => setIsAdminModalOpen(true)}
+              className="inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
+              title="Admin & MLOps Dashboard"
+            >
+              <Sliders className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Admin</span>
+            </button>
+          )}
 
           {/* Clear Button */}
           <button

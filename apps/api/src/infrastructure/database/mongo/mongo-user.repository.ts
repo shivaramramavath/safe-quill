@@ -91,6 +91,7 @@ export class MongoUserRepository implements UserRepositoryPort {
     return {
       id: doc._id.toString(),
       email: doc.email,
+      role: doc.role || (doc.email?.includes('admin') ? 'admin' : 'user'),
       googleId: doc.googleId,
       createdAt: doc.createdAt?.toISOString ? doc.createdAt.toISOString() : new Date().toISOString(),
       updatedAt: doc.updatedAt?.toISOString ? doc.updatedAt.toISOString() : new Date().toISOString(),

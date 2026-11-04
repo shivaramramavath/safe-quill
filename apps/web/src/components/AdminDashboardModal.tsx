@@ -386,7 +386,7 @@ export function AdminDashboardModal() {
 
                       {fb.reason && (
                         <p className="text-xs text-[var(--fg)] bg-[var(--bg)] p-2.5 border border-[var(--border)]">
-                          "{fb.reason}"
+                          &ldquo;{fb.reason}&rdquo;
                         </p>
                       )}
 

@@ -31,6 +31,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { SESSION_STORE_PORT } from './domain/ports/session-store.port';
 import { SPAM_CLASSIFIER_PORT } from './domain/ports/spam-classifier.port';
 import { LLM_PORT } from './domain/ports/llm.port';
+import { NEXT_WORD_PORT } from './domain/ports/next-word.port';
 import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
 import { SAVED_SESSION_REPOSITORY_PORT } from './domain/ports/saved-session-repository.port';
 import { MAILER_PORT } from './domain/ports/mailer.port';
@@ -38,6 +39,11 @@ import { MAILER_PORT } from './domain/ports/mailer.port';
 // Adapters & Repositories
 import { RedisSessionAdapter } from './infrastructure/redis/redis-session.adapter';
 import { FastApiSpamAdapter } from './infrastructure/ml/fastapi-spam.adapter';
+import { FastApiNextWordAdapter } from './infrastructure/ml/fastapi-next-word.adapter';
+import { CircuitBreakerNextWordDecorator } from './infrastructure/ml/decorators/circuit-breaker-next-word.decorator';
+import { RiskFilteredNextWordDecorator } from './infrastructure/ml/decorators/risk-filtered-next-word.decorator';
+import { CachedNextWordDecorator } from './infrastructure/ml/decorators/cached-next-word.decorator';
+import { RateLimitedNextWordDecorator } from './infrastructure/ml/decorators/rate-limited-next-word.decorator';
 import { GroqAdapter } from './infrastructure/llm/groq.adapter';
 import { CircuitBreakerLlm } from './infrastructure/llm/circuit-breaker-llm';
 import { CachedLlmDecorator } from './infrastructure/llm/cached-llm.decorator';
@@ -88,6 +94,7 @@ import { AdminConfigService } from './application/services/admin-config.service'
 import { AnalyticsService } from './application/services/analytics.service';
 import { EmlParserService } from './application/services/eml-parser.service';
 import { ExportService } from './application/services/export.service';
+import { GhostTextService } from './application/services/ghost-text.service';
 
 // Detectors & Scoring
 import { DetectorFactory } from './domain/detectors/detector.factory';
@@ -115,6 +122,7 @@ import { FeedbackController } from './interfaces/controllers/feedback.controller
 import { AdminController } from './interfaces/controllers/admin.controller';
 import { ExportController } from './interfaces/controllers/export.controller';
 import { HealthController } from './interfaces/controllers/health.controller';
+import { SuggestController } from './interfaces/controllers/suggest.controller';
 import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session.interceptor';
 import { JwtAuthGuard } from './interfaces/http/guards/jwt-auth.guard';
 
@@ -182,6 +190,7 @@ const mongoImports =
     AdminController,
     ExportController,
     HealthController,
+    SuggestController,
   ],
   providers: [
     RedactingLogger,
@@ -190,6 +199,7 @@ const mongoImports =
     AnalysisPipeline,
     AiAssistantService,
     LangGraphAssistantService,
+    GhostTextService,
     AuthService,
     SessionClaimService,
     SavedSessionService,
@@ -237,6 +247,21 @@ const mongoImports =
       useClass: BrevoMailerAdapter,
     },
     {
+      provide: NEXT_WORD_PORT,
+      useFactory: (
+        spamClassifier: any,
+        sessionStore: any,
+      ) => {
+        const rawAdapter = new FastApiNextWordAdapter();
+        const withCircuitBreaker = new CircuitBreakerNextWordDecorator(rawAdapter);
+        const withRiskFilter = new RiskFilteredNextWordDecorator(withCircuitBreaker, spamClassifier);
+        const redisClient = sessionStore?.redisClient || null;
+        const withCache = new CachedNextWordDecorator(withRiskFilter, redisClient);
+        return new RateLimitedNextWordDecorator(withCache, redisClient);
+      },
+      inject: [SPAM_CLASSIFIER_PORT, SESSION_STORE_PORT],
+    },
+    {
       provide: LLM_PORT,
       useFactory: (
         configService: ConfigService,
@@ -267,8 +292,10 @@ const mongoImports =
     AnalyticsService,
     EmlParserService,
     ExportService,
+    GhostTextService,
     SESSION_STORE_PORT,
     SPAM_CLASSIFIER_PORT,
+    NEXT_WORD_PORT,
     LLM_PORT,
     USER_REPOSITORY_PORT,
     SAVED_SESSION_REPOSITORY_PORT,

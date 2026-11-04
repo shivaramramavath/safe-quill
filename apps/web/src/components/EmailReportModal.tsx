@@ -72,7 +72,7 @@ export function EmailReportModal() {
         </div>
 
         <p className="text-xs text-[var(--muted)] mb-4">
-          Dispatch an official HTML audit summary of this email draft's risk verdict, score, and flagged indicators powered by Brevo.
+          Dispatch an official HTML audit summary of this email draft&apos;s risk verdict, score, and flagged indicators powered by Brevo.
         </p>
 
         {analysisResult && (

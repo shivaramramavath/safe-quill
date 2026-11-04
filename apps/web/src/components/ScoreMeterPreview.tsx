@@ -140,7 +140,7 @@ export function ScoreMeter({
       </div>
 
       {/* Top Risky Tokens Highlight Panel */}
-      {topTokens && topTokens.length > 0 && (
+      {topTokens && topTokens.length > 0 && level !== 'LOW' && (
         <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-mono text-muted-fg uppercase mr-1">
             Top Risky Tokens:

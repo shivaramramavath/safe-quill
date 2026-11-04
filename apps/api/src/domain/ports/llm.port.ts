@@ -3,6 +3,11 @@ import {
   RewriteMode,
   RiskEvidence,
   ToneAnalysis,
+  GenerateDraftRequest,
+  SummarizeRequest,
+  SummarizeResponse,
+  AiActionRequest,
+  AiActionResponse,
 } from '@safe-quill/shared';
 
 export const LLM_PORT = Symbol('LlmPort');
@@ -36,4 +41,12 @@ export interface LlmPort {
   translate(text: string, targetLanguage: string): Promise<string>;
 
   completeInline(text: string): Promise<string>;
+
+  generateDraft?(
+    dto: GenerateDraftRequest,
+  ): Promise<{ drafts: Array<{ subject: string; body: string }> }>;
+
+  summarizeRich?(dto: SummarizeRequest): Promise<SummarizeResponse>;
+
+  executeAction?(dto: AiActionRequest): Promise<AiActionResponse>;
 }

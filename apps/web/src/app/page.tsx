@@ -4,8 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { GuestBanner } from '../components/GuestBanner';
 import { Editor } from '../components/Editor';
-import { ScoreMeter } from '../components/ScoreMeterPreview';
-import { ExplanationsPanel } from '../components/ExplanationsPanel';
+import { RightPanel } from '../components/RightPanel';
 import { ClearModal } from '../components/ClearModal';
 import { AuthModal } from '../components/AuthModal';
 import { SavedSessionsDrawer } from '../components/SavedSessionsDrawer';
@@ -13,22 +12,18 @@ import { EmailReportModal } from '../components/EmailReportModal';
 import { AccountSettingsModal } from '../components/AccountSettingsModal';
 import { ReportFeedbackModal } from '../components/ReportFeedbackModal';
 import { AdminDashboardModal } from '../components/AdminDashboardModal';
+import { CommandPalette } from '../components/CommandPalette';
+import { ShortcutsModal } from '../components/ShortcutsModal';
 import { useDraftStore } from '../store/useDraftStore';
 import { clearSessionDraft, fetchCurrentUser, fetchSavedSessions } from '../lib/api';
-import { countWordsAndChars } from '../lib/utils';
 
 export default function Home() {
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const {
-    body,
-    analysisResult,
-    isAnalyzing,
     resetDraft,
     setCurrentUser,
     setSavedSessions,
   } = useDraftStore();
-
-  const counts = countWordsAndChars(body);
 
   useEffect(() => {
     // Check if user has an active authenticated session
@@ -59,38 +54,26 @@ export default function Home() {
       <GuestBanner />
 
       {/* Main Header */}
-      <Header
-        onClearClick={() => setIsClearModalOpen(true)}
-        wordCount={counts.words}
-        charCount={counts.chars}
-      />
+      <Header onClearClick={() => setIsClearModalOpen(true)} />
 
-      {/* Body Content */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8 flex flex-col gap-6">
-        {/* Real-time Risk meter with live latency and top token highlights */}
-        <ScoreMeter
-          score={analysisResult?.score ?? 0}
-          level={analysisResult?.level ?? 'LOW'}
-          isAnalyzing={isAnalyzing}
-          latencyMs={analysisResult?.latencyMs}
-          cached={analysisResult?.cached}
-          modelVersion={analysisResult?.modelVersion}
-          topTokens={analysisResult?.topTokens}
-          evidenceCount={analysisResult?.evidence?.length ?? 0}
-        />
+      {/* Two-Column Responsive Layout (Step 7) */}
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Email Editor (~60% desktop width) */}
+          <div className="lg:col-span-7 flex flex-col gap-6 w-full">
+            <Editor />
+          </div>
 
-        {/* Security Evidence & Explanations Panel */}
-        {analysisResult?.evidence && analysisResult.evidence.length > 0 && (
-          <ExplanationsPanel evidence={analysisResult.evidence} />
-        )}
-
-        {/* Email Editor */}
-        <Editor />
+          {/* Right Column: Tabbed Panel (~40% desktop width) */}
+          <div className="lg:col-span-5 flex flex-col gap-6 w-full">
+            <RightPanel />
+          </div>
+        </div>
       </main>
 
-      {/* Minimal Footer */}
+      {/* Minimal Monochrome Footer (Requirement 2) */}
       <footer className="w-full border-t border-border py-4 text-center text-xs font-mono text-muted-fg">
-        SafeQuill &middot; Zero raw content logging &middot; Ephemeral guest session (24h TTL) &middot; Brevo Security Mailer
+        SafeQuill &middot; Zero raw content logging
       </footer>
 
       {/* Clear Confirmation Modal */}
@@ -109,6 +92,10 @@ export default function Home() {
       {/* Phase 6 Feedback & Admin Modals */}
       <ReportFeedbackModal />
       <AdminDashboardModal />
+
+      {/* Global Quick Action Modals (Step 6) */}
+      <CommandPalette />
+      <ShortcutsModal />
     </div>
   );
 }

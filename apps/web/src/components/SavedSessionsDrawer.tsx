@@ -99,7 +99,7 @@ export function SavedSessionsDrawer() {
           ) : savedSessions.length === 0 ? (
             <div className="py-12 text-center text-xs text-[var(--muted)] space-y-2">
               <p>No saved email drafts yet.</p>
-              <p className="text-[11px]">Click "Save Draft" in the top bar to keep your current draft.</p>
+              <p className="text-[11px]">Click &ldquo;Save Draft&rdquo; in the top bar to keep your current draft.</p>
             </div>
           ) : (
             savedSessions.map((s) => (

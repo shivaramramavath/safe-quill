@@ -9,6 +9,14 @@ import {
   RewriteMode,
   RiskEvidence,
   ToneAnalysis,
+  maskPii,
+  predictLocalNextWord,
+  chunkTextForSummary,
+  GenerateDraftRequest,
+  SummarizeRequest,
+  SummarizeResponse,
+  AiActionRequest,
+  AiActionResponse,
 } from '@safe-quill/shared';
 import {
   LlmGrammarResult,
@@ -285,13 +293,342 @@ Instructions: Return ONLY the final rewritten email body. In SAFE mode, prepend 
 
   async completeInline(text: string): Promise<string> {
     await this.assertNoInjection(text);
-    const trimmed = text.trim();
-    if (trimmed.endsWith('please let me know if')) {
-      return ' you have any further questions.';
+
+    // Limit context to last ~600 chars
+    const context = text.slice(-600);
+    const { maskedText, restore } = maskPii(context);
+
+    if (this.apiKey && !this.apiKey.includes('placeholder')) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are an inline email auto-completion assistant. Given the preceding email context, predict and complete the current sentence naturally up to 25 tokens. Return ONLY the continuation text with leading space if appropriate. NEVER suggest URLs, hyperlinks, or markdown links. Do not repeat the context.',
+              },
+              {
+                role: 'user',
+                content: LlmPromptGuard.wrapUntrustedContent(maskedText),
+              },
+            ],
+            max_tokens: 25,
+            temperature: 0.3,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          let completion = data.choices?.[0]?.message?.content?.trim() || '';
+          // Strip any accidental URLs
+          completion = completion.replace(/https?:\/\/\S+/gi, '').replace(/www\.\S+/gi, '');
+          if (completion) {
+            return restore(completion.startsWith(' ') ? completion : ` ${completion}`);
+          }
+        }
+      } catch (err: any) {
+        this.logger.debug(`Groq inline completion fell back to local n-gram: ${err.message}`);
+      }
     }
-    if (trimmed.endsWith('thank you for')) {
-      return ' your prompt assistance in this matter.';
+
+    // Silent fallback to Tier (a) local n-gram
+    return predictLocalNextWord(text) || '';
+  }
+
+  async generateDraft(
+    dto: GenerateDraftRequest,
+  ): Promise<{ drafts: Array<{ subject: string; body: string }> }> {
+    await this.assertNoInjection(dto.prompt);
+
+    const lengthGuide =
+      dto.length === 'short'
+        ? 'under 100 words'
+        : dto.length === 'long'
+        ? 'around 250-350 words'
+        : 'around 150-200 words';
+
+    const systemPrompt = `You are a professional email composer. Draft an email according to the user instructions.
+Recipient context: ${dto.recipient || 'general professional'}
+Tone: ${dto.tone || 'professional'}
+Desired length: ${lengthGuide}
+${dto.currentSubject ? `Current subject to refine: ${dto.currentSubject}` : ''}
+${dto.variants ? 'Generate exactly 3 distinctly styled draft variations.' : 'Generate 1 polished draft.'}
+Return ONLY valid JSON matching this schema:
+${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "...", "body": "..."}, {"subject": "...", "body": "..."}]}' : '{"drafts": [{"subject": "...", "body": "..."}]}'}`;
+
+    if (this.apiKey && !this.apiKey.includes('placeholder')) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 9000);
+
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: LlmPromptGuard.wrapUntrustedContent(dto.prompt) },
+            ],
+            temperature: 0.5,
+            response_format: { type: 'json_object' },
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          const parsed = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+          if (Array.isArray(parsed.drafts) && parsed.drafts.length > 0) {
+            return { drafts: parsed.drafts };
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Groq generateDraft fallback used: ${err.message}`);
+      }
     }
-    return ' and look forward to hearing from you.';
+
+    // High quality deterministic fallback
+    const fallbackSubject = dto.currentSubject || `Regarding: ${dto.prompt.slice(0, 40)}`;
+    const fallbackBody = `Dear ${dto.recipient || 'Team'},\n\nI am writing regarding ${dto.prompt}.\n\nPlease review and let me know if you have any questions or require additional details.\n\nBest regards,\nSafeQuill Team`;
+
+    return {
+      drafts: dto.variants
+        ? [
+            { subject: fallbackSubject, body: fallbackBody },
+            {
+              subject: `Quick Update: ${fallbackSubject}`,
+              body: `Hi ${dto.recipient || 'there'},\n\nWanted to reach out briefly about ${dto.prompt}.\n\nLooking forward to catching up soon.\n\nThanks,\nSafeQuill Team`,
+            },
+            {
+              subject: `Formal Notice: ${fallbackSubject}`,
+              body: `Dear ${dto.recipient || 'Colleague'},\n\nThis communication pertains to ${dto.prompt}. Your attention to this matter is appreciated.\n\nSincerely,\nSafeQuill Team`,
+            },
+          ]
+        : [{ subject: fallbackSubject, body: fallbackBody }],
+    };
+  }
+
+  async summarizeRich(dto: SummarizeRequest): Promise<SummarizeResponse> {
+    await this.assertNoInjection(dto.text);
+
+    let workingText = dto.text;
+    let safetyNote: string | undefined;
+
+    if (dto.safeSummary) {
+      // Neutralize raw links, phone numbers, and payment cards
+      workingText = workingText
+        .replace(/https?:\/\/\S+/gi, '[link neutralized]')
+        .replace(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '[phone redacted]')
+        .replace(/\b(?:\d{4}[-\s]?){3}\d{1,4}\b/g, '[payment details redacted]');
+      safetyNote =
+        'Safe summary mode: All raw URLs, contact numbers, and payment details have been neutralized to prevent accidental exploitation.';
+    }
+
+    // Chunking for long emails
+    const chunks = chunkTextForSummary(workingText, 2500);
+    const wordCount = workingText.trim().split(/\s+/).length;
+    const readingTimeMin = Math.max(1, Math.ceil(wordCount / 200));
+
+    // Detected Intent & Tone heuristic
+    const isUrgent = /(urgent|immediate|asap|deadline|suspend)/i.test(workingText);
+    const isFinancial = /(invoice|payment|wire|bank|transfer|fee|bill)/i.test(workingText);
+    const intent = isFinancial
+      ? 'Financial / Transactional Inquiry'
+      : isUrgent
+      ? 'Urgent Action Required'
+      : 'General Business Communication';
+    const detectedTone = isUrgent ? 'Coercive / Urgent' : 'Informative';
+    const detectedLang = /(hola|gracias|urgente)/i.test(workingText)
+      ? 'Spanish'
+      : /(hallo|danke|dringend)/i.test(workingText)
+      ? 'German'
+      : 'English';
+
+    if (this.apiKey && !this.apiKey.includes('placeholder')) {
+      try {
+        const modeInstruction =
+          dto.mode === 'tldr'
+            ? 'Provide a 1-sentence executive TL;DR summary.'
+            : dto.mode === 'short'
+            ? 'Provide a concise 3-bullet-point summary.'
+            : dto.mode === 'action_items'
+            ? 'Extract all explicit action items in JSON: {"actionItems": [{"owner": "...", "task": "...", "deadline": "..."}]}'
+            : dto.mode === 'key_facts'
+            ? 'Extract all key facts in JSON: {"keyFacts": {"dates": [...], "amounts": [...], "names": [...], "links": [...]}}'
+            : 'Provide a detailed, well-structured paragraph summary.';
+
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: `You are an email analysis and summarization specialist. ${modeInstruction} Return plain text for tldr/short/detailed, or JSON for action_items/key_facts.`,
+              },
+              {
+                role: 'user',
+                content: LlmPromptGuard.wrapUntrustedContent(chunks[0]),
+              },
+            ],
+            temperature: 0.2,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content?.trim() || '';
+
+          let parsedActionItems;
+          let parsedKeyFacts;
+
+          if (dto.mode === 'action_items') {
+            try {
+              const parsed = JSON.parse(content);
+              parsedActionItems = parsed.actionItems;
+            } catch {}
+          } else if (dto.mode === 'key_facts') {
+            try {
+              const parsed = JSON.parse(content);
+              parsedKeyFacts = parsed.keyFacts;
+            } catch {}
+          }
+
+          return {
+            summary: content,
+            mode: dto.mode,
+            intent,
+            tone: detectedTone,
+            language: detectedLang,
+            readingTimeMin,
+            safetyNote,
+            actionItems: parsedActionItems,
+            keyFacts: parsedKeyFacts,
+          };
+        }
+      } catch (err: any) {
+        this.logger.warn(`Groq summarizeRich fallback used: ${err.message}`);
+      }
+    }
+
+    // Deterministic fallback summary
+    const sentences = workingText.split(/(?<=[.?!])\s+/);
+    let fallbackSummary = sentences.slice(0, 3).join(' ');
+    if (dto.mode === 'tldr') {
+      fallbackSummary = sentences[0] || 'Summary unavailable.';
+    } else if (dto.mode === 'short') {
+      fallbackSummary = sentences.slice(0, 3).map((s) => `• ${s.trim()}`).join('\n');
+    }
+
+    return {
+      summary: fallbackSummary,
+      mode: dto.mode,
+      intent,
+      tone: detectedTone,
+      language: detectedLang,
+      readingTimeMin,
+      safetyNote,
+      actionItems: [
+        {
+          owner: 'Recipient',
+          task: 'Review email context and respond if required',
+          deadline: isUrgent ? 'Today' : 'Standard',
+        },
+      ],
+      keyFacts: {
+        dates: (workingText.match(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g) || []),
+        amounts: (workingText.match(/[\$€£]\s?\d+(?:,\d{3})*(?:\.\d{2})?/g) || []),
+        names: [],
+        links: dto.safeSummary ? [] : (workingText.match(/https?:\/\/\S+/g) || []),
+      },
+    };
+  }
+
+  async executeAction(dto: AiActionRequest): Promise<AiActionResponse> {
+    await this.assertNoInjection(dto.text);
+
+    let instruction = '';
+    if (dto.action === 'fix_grammar') {
+      instruction = 'Fix all grammatical errors, typos, and formatting issues. Keep phrasing authentic.';
+    } else if (dto.action === 'expand') {
+      instruction = 'Expand this email draft with polite context, pleasantries, and structured paragraphs.';
+    } else if (dto.action === 'shorten') {
+      instruction = 'Shorten this email aggressively to its core purpose. Eliminate all unnecessary fluff.';
+    } else if (dto.action === 'translate') {
+      instruction = `Translate this email into ${dto.targetLanguage || 'Spanish'} while preserving professional etiquette.`;
+    } else if (dto.action === 'generate_reply') {
+      instruction = `Generate a polite, clear email reply with intent "${dto.replyIntent || 'polite acknowledgment'}".`;
+    } else if (dto.action === 'extract_action_items') {
+      instruction = 'Extract key bullet points of tasks, next steps, and deliverables from this email.';
+    }
+
+    if (this.apiKey && !this.apiKey.includes('placeholder')) {
+      try {
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: `You are an AI email assistant. Task: ${instruction}. Return ONLY the final revised email text.`,
+              },
+              { role: 'user', content: LlmPromptGuard.wrapUntrustedContent(dto.text) },
+            ],
+            temperature: 0.3,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const resultText = data.choices?.[0]?.message?.content?.trim() || dto.text;
+          return {
+            resultText,
+            explanation: `Action "${dto.action}" completed via Llama 3.3.`,
+          };
+        }
+      } catch (err: any) {
+        this.logger.warn(`executeAction Groq fallback: ${err.message}`);
+      }
+    }
+
+    return {
+      resultText:
+        dto.action === 'shorten'
+          ? dto.text.split(/(?<=[.?!])\s+/).slice(0, 2).join(' ')
+          : dto.action === 'translate'
+          ? `[${dto.targetLanguage || 'Spanish'} Translation]: ${dto.text}`
+          : dto.action === 'generate_reply'
+          ? `Thank you for reaching out.\n\nI have received your email regarding this matter and will review it promptly.\n\nBest regards,\nSafeQuill Team`
+          : dto.text,
+      explanation: `Action "${dto.action}" completed via local fallback.`,
+    };
   }
 }

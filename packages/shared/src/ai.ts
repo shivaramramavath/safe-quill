@@ -61,3 +61,88 @@ export interface GrammarCheckResponse {
   fixes: GrammarFix[];
   correctedText: string;
 }
+
+export interface InlineCompleteRequest {
+  text: string;
+}
+
+export interface InlineCompleteResponse {
+  completion: string;
+  tier: 'groq' | 'local';
+  aiUsed: boolean;
+}
+
+export interface GenerateDraftRequest {
+  prompt: string;
+  recipient?: string;
+  tone?: string;
+  length?: 'short' | 'medium' | 'long';
+  variants?: boolean;
+  currentSubject?: string;
+}
+
+export interface GeneratedDraft {
+  subject: string;
+  body: string;
+  score: number;
+  level: RiskLevel;
+  isSpam: boolean;
+  topTokens?: Array<{ token: string; weight: number }>;
+}
+
+export interface GenerateDraftResponse {
+  drafts: GeneratedDraft[];
+}
+
+export type SummaryMode = 'tldr' | 'short' | 'detailed' | 'action_items' | 'key_facts';
+
+export interface SummarizeRequest {
+  text: string;
+  mode: SummaryMode;
+  safeSummary?: boolean;
+}
+
+export interface ActionItem {
+  owner?: string;
+  task: string;
+  deadline?: string;
+}
+
+export interface SummarizeResponse {
+  summary: string;
+  mode: SummaryMode;
+  intent: string;
+  tone: string;
+  language: string;
+  readingTimeMin: number;
+  safetyNote?: string;
+  actionItems?: ActionItem[];
+  keyFacts?: {
+    dates: string[];
+    amounts: string[];
+    names: string[];
+    links: string[];
+  };
+}
+
+export type AiActionType =
+  | 'fix_grammar'
+  | 'expand'
+  | 'shorten'
+  | 'translate'
+  | 'generate_reply'
+  | 'extract_action_items';
+
+export interface AiActionRequest {
+  text: string;
+  action: AiActionType;
+  targetLanguage?: string;
+  replyIntent?: string;
+}
+
+export interface AiActionResponse {
+  resultText: string;
+  explanation: string;
+  score?: number;
+  level?: RiskLevel;
+}

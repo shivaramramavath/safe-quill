@@ -10,6 +10,7 @@ import {
   RewriteEmailRequest,
   RewriteEmailResponse,
   RiskAnalysisResult,
+  RiskLevel,
   SavedSession,
   SaveSessionRequest,
   SendReportRequest,
@@ -609,6 +610,139 @@ export async function exportJson(
 
   if (!res.ok) {
     throw new Error(`Failed to export JSON: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export interface SuggestNextWordResponse {
+  suggestions: Array<{ completion: string; confidence: number }>;
+  tier: 'local' | 'groq';
+  model: string;
+}
+
+export async function requestSuggestNextWord(
+  context: string,
+  allowLlmTier: boolean = false,
+  signal?: AbortSignal,
+): Promise<SuggestNextWordResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/suggest/next-word`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context: context.slice(-600), allowLlmTier }),
+      signal,
+    });
+
+    if (!res.ok) {
+      return { suggestions: [], tier: 'local', model: 'fallback' };
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    return { suggestions: [], tier: 'local', model: 'fallback' };
+  }
+}
+
+export async function recordGhostMetric(metric: {
+  shown?: number;
+  accepted?: number;
+  dismissed?: number;
+  tier?: 'local' | 'groq';
+  latencyMs?: number;
+}): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/v1/suggest/metrics`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metric),
+    });
+  } catch {
+    // Fire and forget metrics
+  }
+}
+
+export async function requestInlineComplete(
+  text: string,
+  signal?: AbortSignal,
+): Promise<{ completion: string; tier: 'groq' | 'local'; aiUsed: boolean }> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/complete`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+    signal,
+  });
+
+  if (!res.ok) {
+    return { completion: '', tier: 'local', aiUsed: false };
+  }
+
+  return res.json();
+}
+
+export async function requestGenerateDraft(dto: {
+  prompt: string;
+  recipient?: string;
+  tone?: string;
+  length?: 'short' | 'medium' | 'long';
+  variants?: boolean;
+  currentSubject?: string;
+}): Promise<{ drafts: Array<{ subject: string; body: string; score: number; level: RiskLevel; isSpam: boolean }> }> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/generate`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || 'Failed to generate drafts');
+  }
+
+  return res.json();
+}
+
+export async function requestSummarize(dto: {
+  text: string;
+  mode: 'tldr' | 'short' | 'detailed' | 'action_items' | 'key_facts';
+  safeSummary?: boolean;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/summarize`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || 'Failed to summarize text');
+  }
+
+  return res.json();
+}
+
+export async function requestAiAction(dto: {
+  text: string;
+  action: string;
+  targetLanguage?: string;
+  replyIntent?: string;
+}): Promise<{ resultText: string; explanation: string; score?: number; level?: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/ai/action`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || `Failed to execute ${dto.action}`);
   }
 
   return res.json();

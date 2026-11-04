@@ -36,6 +36,14 @@ interface DraftStoreState {
   isReportFeedbackModalOpen: boolean;
   isAdminModalOpen: boolean;
 
+  // Modern UI & Tab State
+  inlineSuggestionsEnabled: boolean;
+  aiSuggestionsEnabled: boolean;
+  activeRightTab: 'verdict' | 'summary' | 'generate' | 'details';
+  editorMode: 'inspect' | 'compose';
+  isCommandPaletteOpen: boolean;
+  isShortcutsOpen: boolean;
+
   // Actions
   setSubject: (subject: string) => void;
   setBody: (body: string) => void;
@@ -51,6 +59,12 @@ interface DraftStoreState {
   setIsAccountModalOpen: (open: boolean) => void;
   setIsReportFeedbackModalOpen: (open: boolean) => void;
   setIsAdminModalOpen: (open: boolean) => void;
+  setInlineSuggestionsEnabled: (enabled: boolean) => void;
+  setAiSuggestionsEnabled: (enabled: boolean) => void;
+  setActiveRightTab: (tab: 'verdict' | 'summary' | 'generate' | 'details') => void;
+  setEditorMode: (mode: 'inspect' | 'compose') => void;
+  setIsCommandPaletteOpen: (open: boolean) => void;
+  setIsShortcutsOpen: (open: boolean) => void;
   hydrateFromServer: (draft: DraftState) => void;
   loadSavedSession: (session: SavedSession) => void;
   resetDraft: () => void;
@@ -82,6 +96,19 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
   isReportFeedbackModalOpen: false,
   isAdminModalOpen: false,
 
+  inlineSuggestionsEnabled:
+    typeof window !== 'undefined'
+      ? localStorage.getItem('safequill_inline_suggestions') !== 'false'
+      : true,
+  aiSuggestionsEnabled:
+    typeof window !== 'undefined'
+      ? localStorage.getItem('safequill_ai_suggestions') !== 'false'
+      : true,
+  activeRightTab: 'verdict',
+  editorMode: 'inspect',
+  isCommandPaletteOpen: false,
+  isShortcutsOpen: false,
+
   setAnalysisResult: (result) => set({ analysisResult: result }),
   setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
   setCurrentUser: (user) => set({ currentUser: user }),
@@ -92,6 +119,22 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
   setIsAccountModalOpen: (open) => set({ isAccountModalOpen: open }),
   setIsReportFeedbackModalOpen: (open) => set({ isReportFeedbackModalOpen: open }),
   setIsAdminModalOpen: (open) => set({ isAdminModalOpen: open }),
+  setInlineSuggestionsEnabled: (enabled) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('safequill_inline_suggestions', enabled ? 'true' : 'false');
+    }
+    set({ inlineSuggestionsEnabled: enabled });
+  },
+  setAiSuggestionsEnabled: (enabled) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('safequill_ai_suggestions', enabled ? 'true' : 'false');
+    }
+    set({ aiSuggestionsEnabled: enabled });
+  },
+  setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
+  setEditorMode: (editorMode) => set({ editorMode }),
+  setIsCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
+  setIsShortcutsOpen: (open) => set({ isShortcutsOpen: open }),
 
   setSubject: (newSubject: string) => {
     const { subject, body, undoStack } = get();

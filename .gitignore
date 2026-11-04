@@ -19,3 +19,9 @@ __pycache__
 venv
 .DS_Store
 *.swp
+# ML Models & Ghost Text Corpora
+apps/ml/ghost/data/
+apps/ml/ghost/models/
+*.joblib
+*.msgpack
+*.corpus

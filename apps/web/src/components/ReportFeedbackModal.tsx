@@ -93,7 +93,7 @@ export function ReportFeedbackModal() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-[var(--fg)] mb-2">
-                What should this email's classification be?
+                What should this email&apos;s classification be?
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button

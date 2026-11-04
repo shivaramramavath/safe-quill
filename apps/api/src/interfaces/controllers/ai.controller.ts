@@ -83,4 +83,24 @@ export class AiController {
   ): Promise<GrammarCheckResponse> {
     return this.aiService.explainGrammar(dto.text);
   }
+
+  @Post('complete')
+  async completeInline(@Body() dto: { text: string }) {
+    return this.aiService.completeInline(dto.text || '');
+  }
+
+  @Post('generate')
+  async generateDraft(@Body() dto: any) {
+    return this.aiService.generate(dto);
+  }
+
+  @Post('summarize')
+  async summarizeRich(@Body() dto: any) {
+    return this.aiService.summarizeRich(dto);
+  }
+
+  @Post('action')
+  async executeAction(@Body() dto: any) {
+    return this.aiService.executeAction(dto);
+  }
 }

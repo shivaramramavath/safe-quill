@@ -100,27 +100,44 @@ class SpamClassifierService:
         else:
             level = "LOW"
 
+        # Common neutral and stop words that should not be flagged as risky tokens
+        COMMON_STOPWORDS = {
+            "your", "dear", "with", "report", "the", "and", "to", "of", "a", "in", "is", "it",
+            "you", "that", "he", "was", "for", "on", "are", "as", "at", "be", "this", "have",
+            "from", "or", "one", "had", "by", "word", "but", "not", "what", "all", "were", "we",
+            "when", "can", "said", "there", "use", "an", "each", "which", "she", "do", "how",
+            "their", "if", "will", "up", "other", "about", "out", "many", "then", "them", "these",
+            "so", "some", "her", "would", "make", "like", "him", "into", "time", "has", "look",
+            "two", "more", "write", "go", "see", "number", "no", "way", "could", "people", "my",
+            "than", "first", "water", "been", "call", "who", "oil", "its", "now", "find", "long",
+            "down", "day", "did", "get", "come", "made", "may", "part", "please", "thanks", "hello",
+            "hi", "regards", "sincerely", "team", "support", "service", "customer"
+        }
+
         # Feature contribution analysis for explanation
-        # For each token present in input, compute contribution = tfidf_value * coef
-        coefficients = self.classifier.coef_[0]
-        feature_indices = vec.indices
-        tfidf_values = vec.data
-
+        # Per requirement: only list tokens that push the score toward spam (positive contribution
+        # above a threshold), and hide the list when the verdict is LOW.
         contributions: List[Dict[str, Any]] = []
-        for idx, val in zip(feature_indices, tfidf_values):
-            coef = coefficients[idx]
-            token = str(self.feature_names[idx])
-            contribution = float(val * coef)
+        if level != "LOW":
+            coefficients = self.classifier.coef_[0]
+            feature_indices = vec.indices
+            tfidf_values = vec.data
 
-            # We care about positive contributions towards spam classification
-            if contribution > 0:
-                contributions.append({
-                    "token": token,
-                    "weight": round(contribution, 4),
-                })
+            for idx, val in zip(feature_indices, tfidf_values):
+                coef = coefficients[idx]
+                token = str(self.feature_names[idx]).lower()
+                contribution = float(val * coef)
 
-        # Sort top positive contributing tokens descending
-        contributions.sort(key=lambda x: x["weight"], reverse=True)
+                # Positive contribution threshold (>= 0.15) and exclude common stop words
+                if contribution >= 0.15 and token not in COMMON_STOPWORDS:
+                    contributions.append({
+                        "token": token,
+                        "weight": round(contribution, 4),
+                    })
+
+            # Sort top positive contributing tokens descending
+            contributions.sort(key=lambda x: x["weight"], reverse=True)
+
         top_tokens = contributions[:10]
 
         return {

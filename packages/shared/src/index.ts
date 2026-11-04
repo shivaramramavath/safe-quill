@@ -4,3 +4,7 @@ export * from './ai';
 export * from './auth';
 export * from './admin';
 export * from './advanced';
+export * from './paste-splitter';
+export * from './pii-masker';
+export * from './ghost-text';
+export * from './summary-chunker';

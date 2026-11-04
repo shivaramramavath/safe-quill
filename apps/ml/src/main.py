@@ -1,12 +1,23 @@
 import os
+import sys
+import time
 import json
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 
-from classifier import classifier_instance
+# Ensure src and ghost packages are discoverable
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_ROOT = os.path.dirname(SRC_DIR)
+for p in [SRC_DIR, APP_ROOT]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-app = FastAPI(title="SafeQuill ML Classifier Service", version="1.0.0")
+from classifier import classifier_instance
+from ghost.predictor import GhostPredictor
+
+app = FastAPI(title="SafeQuill ML Classifier & Ghost Text Service", version="1.0.0")
+ghost_predictor_instance = GhostPredictor()
 
 class PredictRequest(BaseModel):
     text: str
@@ -22,6 +33,41 @@ class PredictResponse(BaseModel):
     level: str
     top_tokens: List[TokenContribution]
     model_version: str
+
+class SuggestRequest(BaseModel):
+    context: str = Field(..., max_length=600)
+    top_k: int = 3
+
+class SuggestionItem(BaseModel):
+    completion: str
+    confidence: float
+
+class SuggestResponse(BaseModel):
+    model: str
+    suggestions: List[SuggestionItem]
+
+@app.post("/suggest", response_model=SuggestResponse)
+def suggest_next_word(req: SuggestRequest) -> SuggestResponse:
+    if len(req.context) > 600:
+        raise HTTPException(status_code=400, detail="Context exceeds maximum length of 600 characters.")
+
+    start_time = time.perf_counter()
+    top_k = min(max(req.top_k, 1), 5)
+
+    try:
+        suggestions = ghost_predictor_instance.suggest(req.context, top_k=top_k)
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+        # Server-side 50 ms time budget: return empty list on timeout
+        if elapsed_ms > 50.0:
+            return SuggestResponse(model=ghost_predictor_instance.version, suggestions=[])
+
+        return SuggestResponse(
+            model=ghost_predictor_instance.version,
+            suggestions=[SuggestionItem(**s) for s in suggestions],
+        )
+    except Exception:
+        return SuggestResponse(model=ghost_predictor_instance.version, suggestions=[])
 
 @app.get("/health")
 def health_check() -> Dict[str, Any]:

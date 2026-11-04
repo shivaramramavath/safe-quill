@@ -1,6 +1,7 @@
 export interface UserProfile {
   id: string;
   email: string;
+  role?: 'admin' | 'user';
   googleId?: string;
   createdAt: string;
   updatedAt: string;

@@ -34,6 +34,7 @@ def train_and_export():
         ngram_range=(1, 2),
         sublinear_tf=True,
         lowercase=True,
+        stop_words="english",
         max_features=5000,
     )
 
@@ -41,9 +42,8 @@ def train_and_export():
     X_test_vec = vectorizer.transform(X_test)
 
     classifier = LogisticRegression(
-        C=2.5,
+        C=1.5,
         max_iter=1000,
-        class_weight="balanced",
         random_state=42,
     )
     classifier.fit(X_train_vec, y_train)

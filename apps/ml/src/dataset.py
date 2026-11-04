@@ -24,6 +24,15 @@ CURATED_PHISHING: List[Tuple[str, int]] = [
     ("Action Required: Your Microsoft 365 password expires today. Keep your same password by validating here.", 1),
 ]
 
+CURATED_HAM: List[Tuple[str, int]] = [
+    ("Subject: Formal complaint regarding delayed shipment. Dear Support Team, I am writing to submit a complaint regarding order #8921. It has been two weeks since the purchase date and the package has not arrived. Please check the tracking status and advise on when I can expect delivery. Sincerely, David Miller.", 0),
+    ("Subject: Complaint regarding defective monitor. Hi Customer Service, the monitor delivered yesterday does not power on even after testing multiple outlets. I would like to request an exchange under the standard 1-year product warranty. Thank you.", 0),
+    ("Subject: Service interruption complaint. Dear Account Manager, our office experienced unexpected downtime this morning affecting our team operations. We request a detailed post-incident review and confirmation of SLA credit.", 0),
+    ("Subject: Discrepancy on monthly invoice. Hello billing department, I noticed an unexpected charge of $12 on our latest statement. Could you please review and issue an adjusted invoice? Regards, Lisa.", 0),
+    ("Subject: Meeting reschedule. Hi Team, due to a calendar conflict with our executive review, could we move our sync from Tuesday morning to Wednesday at 2 PM? Let me know if that works for everyone.", 0),
+    ("Subject: Customer feedback. Dear store manager, I visited your branch today and experienced poor service at the customer service desk. I am sharing this feedback so the team can address staffing during peak hours.", 0),
+]
+
 def get_training_data() -> Tuple[List[str], List[int]]:
     texts: List[str] = []
     labels: List[int] = []
@@ -45,11 +54,17 @@ def get_training_data() -> Tuple[List[str], List[int]]:
                     texts.append(sample)
                     labels.append(label)
 
+                # Augment with curated formal complaint & business ham samples
+                for sample, label in CURATED_HAM:
+                    texts.append(sample)
+                    labels.append(label)
+
                 print(f"Loaded {len(texts)} total samples ({sum(labels)} spam, {len(labels) - sum(labels)} ham).")
                 return texts, labels
         except Exception as e:
             print(f"Notice: Failed to parse {CSV_PATH} ({e}), using curated samples.")
 
-    texts = [sample[0] for sample in CURATED_PHISHING]
-    labels = [sample[1] for sample in CURATED_PHISHING]
+    combined = CURATED_PHISHING + CURATED_HAM
+    texts = [sample[0] for sample in combined]
+    labels = [sample[1] for sample in combined]
     return texts, labels
