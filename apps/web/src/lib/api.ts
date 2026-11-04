@@ -50,3 +50,24 @@ export async function clearSessionDraft(): Promise<SessionResponse> {
 
   return res.json();
 }
+
+export async function analyzeEmail(
+  data: { subject?: string; body: string; rawHeaders?: string },
+  signal?: AbortSignal,
+): Promise<import('@safe-quill/shared').SpamClassificationDto> {
+  const res = await fetch(`${API_BASE}/api/v1/analyze`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+    signal,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to analyze email: ${res.statusText}`);
+  }
+
+  return res.json();
+}

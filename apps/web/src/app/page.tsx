@@ -12,7 +12,7 @@ import { countWordsAndChars } from '../lib/utils';
 
 export default function Home() {
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
-  const { body, resetDraft } = useDraftStore();
+  const { body, analysisResult, isAnalyzing, resetDraft } = useDraftStore();
 
   const counts = countWordsAndChars(body);
 
@@ -39,8 +39,16 @@ export default function Home() {
 
       {/* Body Content */}
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8 flex flex-col gap-6">
-        {/* Risk meter preview / status */}
-        <ScoreMeter score={0} level="LOW" isAnalyzing={false} />
+        {/* Real-time Risk meter with live latency and top token highlights */}
+        <ScoreMeter
+          score={analysisResult?.score ?? 0}
+          level={analysisResult?.level ?? 'LOW'}
+          isAnalyzing={isAnalyzing}
+          latencyMs={analysisResult?.latencyMs}
+          cached={analysisResult?.cached}
+          modelVersion={analysisResult?.modelVersion}
+          topTokens={analysisResult?.topTokens}
+        />
 
         {/* Email Editor */}
         <Editor />

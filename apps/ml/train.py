@@ -1,0 +1,88 @@
+"""
+Training Script for SafeQuill Spam/Phishing Classifier
+Trains TF-IDF + Logistic Regression with model versioning on disk.
+"""
+
+import os
+import json
+from datetime import datetime, timezone
+import joblib
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+from dataset import get_training_data
+
+MODEL_VERSION = "v1.0.0"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+VERSION_DIR = os.path.join(MODELS_DIR, MODEL_VERSION)
+
+def train_and_export():
+    print(f"=== Training SafeQuill Spam Classifier ({MODEL_VERSION}) ===")
+    os.makedirs(VERSION_DIR, exist_ok=True)
+
+    texts, labels = get_training_data()
+    print(f"Loaded {len(texts)} samples ({sum(labels)} spam, {len(labels) - sum(labels)} ham).")
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        texts, labels, test_size=0.25, random_state=42, stratify=labels
+    )
+
+    vectorizer = TfidfVectorizer(
+        ngram_range=(1, 2),
+        sublinear_tf=True,
+        lowercase=True,
+        max_features=5000,
+    )
+
+    X_train_vec = vectorizer.fit_transform(X_train)
+    X_test_vec = vectorizer.transform(X_test)
+
+    classifier = LogisticRegression(
+        C=2.5,
+        max_iter=1000,
+        class_weight="balanced",
+        random_state=42,
+    )
+    classifier.fit(X_train_vec, y_train)
+
+    # Evaluate
+    y_pred = classifier.predict(X_test_vec)
+    accuracy = float(accuracy_score(y_test, y_pred))
+    precision = float(precision_score(y_test, y_pred, zero_division=0))
+    recall = float(recall_score(y_test, y_pred, zero_division=0))
+    f1 = float(f1_score(y_test, y_pred, zero_division=0))
+
+    print(f"Validation Metrics:\n  Accuracy:  {accuracy:.4f}\n  Precision: {precision:.4f}\n  Recall:    {recall:.4f}\n  F1 Score:  {f1:.4f}")
+
+    # Export artifacts
+    joblib.dump(classifier, os.path.join(VERSION_DIR, "classifier.joblib"))
+    joblib.dump(vectorizer, os.path.join(VERSION_DIR, "vectorizer.joblib"))
+
+    metadata = {
+        "version": MODEL_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "algorithm": "TF-IDF + Logistic Regression",
+        "vocabulary_size": len(vectorizer.vocabulary_),
+        "metrics": {
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+        },
+        "sample_count": len(texts),
+    }
+
+    with open(os.path.join(VERSION_DIR, "metadata.json"), "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    with open(os.path.join(MODELS_DIR, "current.json"), "w") as f:
+        json.dump({"active_version": MODEL_VERSION, "path": VERSION_DIR}, f, indent=2)
+
+    print(f"Model successfully saved to: {VERSION_DIR}")
+    return metadata
+
+if __name__ == "__main__":
+    train_and_export()

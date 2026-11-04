@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DraftState } from '@safe-quill/shared';
+import { DraftState, SpamClassificationDto } from '@safe-quill/shared';
 
 interface HistoryState {
   subject: string;
@@ -15,11 +15,17 @@ interface DraftStoreState {
   undoStack: HistoryState[];
   redoStack: HistoryState[];
 
+  // Real-time analysis state
+  analysisResult: SpamClassificationDto | null;
+  isAnalyzing: boolean;
+
   // Actions
   setSubject: (subject: string) => void;
   setBody: (body: string) => void;
   setRawHeaders: (rawHeaders: string) => void;
   setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', time?: string) => void;
+  setAnalysisResult: (result: SpamClassificationDto | null) => void;
+  setIsAnalyzing: (isAnalyzing: boolean) => void;
   hydrateFromServer: (draft: DraftState) => void;
   resetDraft: () => void;
   undo: () => void;
@@ -38,6 +44,11 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
   lastSavedAt: null,
   undoStack: [],
   redoStack: [],
+  analysisResult: null,
+  isAnalyzing: false,
+
+  setAnalysisResult: (result) => set({ analysisResult: result }),
+  setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
 
   setSubject: (newSubject: string) => {
     const { subject, body, undoStack } = get();
@@ -93,6 +104,8 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
       rawHeaders: '',
       saveStatus: 'saved',
       lastSavedAt: new Date().toISOString(),
+      analysisResult: null,
+      isAnalyzing: false,
       undoStack: [],
       redoStack: [],
     });

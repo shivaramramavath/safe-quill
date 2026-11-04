@@ -11,7 +11,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useDraftStore } from '../store/useDraftStore';
-import { fetchCurrentSession, saveDraft } from '../lib/api';
+import { fetchCurrentSession, saveDraft, analyzeEmail } from '../lib/api';
 import { countWordsAndChars } from '../lib/utils';
 
 export function Editor() {
@@ -26,6 +26,8 @@ export function Editor() {
     setBody,
     setRawHeaders,
     setSaveStatus,
+    setAnalysisResult,
+    setIsAnalyzing,
     hydrateFromServer,
     undo,
     redo,
@@ -36,9 +38,53 @@ export function Editor() {
   const [showHeaders, setShowHeaders] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const analyzeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const analysisAbortRef = useRef<AbortController | null>(null);
   const isHydratedRef = useRef(false);
 
-  // Hydrate draft from guest session on initial load
+  // Trigger debounced analysis with request cancellation
+  const triggerAnalysis = useCallback(
+    (subj: string, bdy: string, hdrs?: string) => {
+      if (analyzeTimeoutRef.current) {
+        clearTimeout(analyzeTimeoutRef.current);
+      }
+
+      if (!subj.trim() && !bdy.trim()) {
+        setAnalysisResult(null);
+        setIsAnalyzing(false);
+        return;
+      }
+
+      setIsAnalyzing(true);
+
+      analyzeTimeoutRef.current = setTimeout(async () => {
+        // Cancel in-flight request if user is still typing
+        if (analysisAbortRef.current) {
+          analysisAbortRef.current.abort();
+        }
+
+        const controller = new AbortController();
+        analysisAbortRef.current = controller;
+
+        try {
+          const result = await analyzeEmail(
+            { subject: subj, body: bdy, rawHeaders: hdrs },
+            controller.signal,
+          );
+          setAnalysisResult(result);
+        } catch (err: any) {
+          if (err.name !== 'AbortError') {
+            console.warn('Real-time analysis error:', err);
+          }
+        } finally {
+          setIsAnalyzing(false);
+        }
+      }, 500);
+    },
+    [setAnalysisResult, setIsAnalyzing],
+  );
+
+  // Hydrate draft from guest session on initial load and analyze
   useEffect(() => {
     let mounted = true;
     async function loadSession() {
@@ -47,6 +93,9 @@ export function Editor() {
         if (mounted && session?.draft) {
           hydrateFromServer(session.draft);
           isHydratedRef.current = true;
+          if (session.draft.subject || session.draft.body) {
+            triggerAnalysis(session.draft.subject, session.draft.body, session.draft.rawHeaders);
+          }
         }
       } catch (err) {
         console.warn('Initial session fetch notice:', err);
@@ -60,8 +109,10 @@ export function Editor() {
     loadSession();
     return () => {
       mounted = false;
+      if (analyzeTimeoutRef.current) clearTimeout(analyzeTimeoutRef.current);
+      if (analysisAbortRef.current) analysisAbortRef.current.abort();
     };
-  }, [hydrateFromServer]);
+  }, [hydrateFromServer, triggerAnalysis]);
 
   // Debounced autosave
   const triggerAutosave = useCallback(
@@ -94,47 +145,50 @@ export function Editor() {
     const val = e.target.value;
     setSubject(val);
     triggerAutosave(val, body, rawHeaders);
+    triggerAnalysis(val, body, rawHeaders);
   };
 
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setBody(val);
     triggerAutosave(subject, val, rawHeaders);
+    triggerAnalysis(subject, val, rawHeaders);
   };
 
   const handleHeadersChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setRawHeaders(val);
     triggerAutosave(subject, body, val);
+    triggerAnalysis(subject, body, val);
   };
 
   // Keyboard undo/redo handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
       if (e.shiftKey) {
-        // Redo (Ctrl+Shift+Z / Cmd+Shift+Z)
         e.preventDefault();
         if (canRedo()) {
           redo();
           const { subject: s, body: b, rawHeaders: h } = useDraftStore.getState();
           triggerAutosave(s, b, h);
+          triggerAnalysis(s, b, h);
         }
       } else {
-        // Undo (Ctrl+Z / Cmd+Z)
         e.preventDefault();
         if (canUndo()) {
           undo();
           const { subject: s, body: b, rawHeaders: h } = useDraftStore.getState();
           triggerAutosave(s, b, h);
+          triggerAnalysis(s, b, h);
         }
       }
     } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-      // Redo (Ctrl+Y)
       e.preventDefault();
       if (canRedo()) {
         redo();
         const { subject: s, body: b, rawHeaders: h } = useDraftStore.getState();
         triggerAutosave(s, b, h);
+        triggerAnalysis(s, b, h);
       }
     }
   };
@@ -165,6 +219,7 @@ export function Editor() {
                 undo();
                 const { subject: s, body: b, rawHeaders: h } = useDraftStore.getState();
                 triggerAutosave(s, b, h);
+                triggerAnalysis(s, b, h);
               }}
               disabled={!canUndo()}
               className="inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent transition-opacity"
@@ -179,6 +234,7 @@ export function Editor() {
                 redo();
                 const { subject: s, body: b, rawHeaders: h } = useDraftStore.getState();
                 triggerAutosave(s, b, h);
+                triggerAnalysis(s, b, h);
               }}
               disabled={!canRedo()}
               className="inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent transition-opacity"
