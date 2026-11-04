@@ -92,6 +92,7 @@ import { MailerController } from './interfaces/controllers/mailer.controller';
 import { FeedbackController } from './interfaces/controllers/feedback.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
 import { ExportController } from './interfaces/controllers/export.controller';
+import { HealthController } from './interfaces/controllers/health.controller';
 import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session.interceptor';
 import { JwtAuthGuard } from './interfaces/http/guards/jwt-auth.guard';
 
@@ -102,9 +103,9 @@ const mongoImports = process.env.MONGODB_URI
         inject: [ConfigService],
         useFactory: (config: ConfigService) => ({
           uri: config.get<string>('MONGODB_URI'),
-          serverSelectionTimeoutMS: 2000,
-          retryAttempts: 1,
-          retryDelay: 500,
+          serverSelectionTimeoutMS: 5000,
+          retryAttempts: 2,
+          retryDelay: 1000,
         }),
       }),
       MongooseModule.forFeature([
@@ -155,6 +156,7 @@ const mongoImports = process.env.MONGODB_URI
     FeedbackController,
     AdminController,
     ExportController,
+    HealthController,
   ],
   providers: [
     RedactingLogger,

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 const request = require('supertest');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
 import { AppModule } from '../src/app.module';
 import { GUEST_COOKIE_NAME } from '@safe-quill/shared';
 
@@ -14,6 +15,7 @@ describe('SafeQuill E2E Acceptance Tests', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(helmet());
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     await app.init();
@@ -399,5 +401,19 @@ describe('SafeQuill E2E Acceptance Tests', () => {
 
     expect(jsonRes.body.format).toBe('json');
     expect(JSON.parse(jsonRes.body.content).audit).toBe('sample-audit-record');
+  });
+
+  it('Phase 8 Criteria: Production readiness, health checks, security headers, and Atlas cloud compatibility', async () => {
+    const healthRes = await request(app.getHttpServer())
+      .get('/health')
+      .expect(200);
+
+    expect(healthRes.body.status).toBe('ok');
+    expect(healthRes.body.version).toBe('1.0.0');
+    expect(healthRes.body.security.rawEmailLogging).toContain('disabled');
+    expect(healthRes.body.services).toBeDefined();
+
+    // Verify security headers from Helmet
+    expect(healthRes.headers['x-content-type-options']).toBe('nosniff');
   });
 });
