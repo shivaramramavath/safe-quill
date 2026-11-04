@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Moon, Sun, Shield, RotateCcw, Bookmark, User, Mail, Send } from 'lucide-react';
+import { Moon, Sun, Shield, RotateCcw, Bookmark, User, Mail, Send, Sliders } from 'lucide-react';
 import { useTheme } from './providers';
 import { useDraftStore } from '@/store/useDraftStore';
 import { saveDraftToAccount } from '@/lib/api';
@@ -26,6 +26,7 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
     setIsSavedDrawerOpen,
     setIsReportModalOpen,
     setIsAccountModalOpen,
+    setIsAdminModalOpen,
   } = useDraftStore();
 
   const [savingAccount, setSavingAccount] = useState(false);
@@ -158,6 +159,17 @@ export function Header({ onClearClick, wordCount, charCount }: HeaderProps) {
               Sign In
             </button>
           )}
+
+          {/* Admin Dashboard */}
+          <button
+            type="button"
+            onClick={() => setIsAdminModalOpen(true)}
+            className="inline-flex items-center gap-1.5 border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--fg)] transition-colors"
+            title="Admin & MLOps Dashboard"
+          >
+            <Sliders className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Admin</span>
+          </button>
 
           {/* Clear Button */}
           <button

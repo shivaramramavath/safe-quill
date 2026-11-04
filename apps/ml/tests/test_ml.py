@@ -48,3 +48,29 @@ def test_empty_text():
     data = response.json()
     assert data["score"] == 0
     assert data["label"] == "ham"
+
+def test_ml_metrics_endpoint():
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "accuracy" in data
+    assert "precision" in data
+    assert "recall" in data
+    assert "confusionMatrix" in data
+    assert data["accuracy"] > 0.90
+    assert data["activeModelVersion"] == "v1.0.0"
+
+def test_ml_models_and_rollback():
+    response = client.get("/models")
+    assert response.status_code == 200
+    data = response.json()
+    assert "v1.0.0" in data["available_versions"]
+
+    # Test rollback to existing version
+    rollback_res = client.post("/models/rollback", json={"version": "v1.0.0"})
+    assert rollback_res.status_code == 200
+    assert rollback_res.json()["success"] is True
+
+    # Test rollback to non-existent version returns 400
+    err_res = client.post("/models/rollback", json={"version": "v999.0.0"})
+    assert err_res.status_code == 400

@@ -1,6 +1,12 @@
 import {
+  AiFeedback,
+  AnalyticsOverview,
   AuthResponse,
+  CreateAiFeedbackRequest,
+  CreatePredictionFeedbackRequest,
   GenerateSubjectsResponse,
+  MlMetrics,
+  PredictionFeedback,
   RewriteEmailRequest,
   RewriteEmailResponse,
   RiskAnalysisResult,
@@ -8,8 +14,10 @@ import {
   SaveSessionRequest,
   SendReportRequest,
   SessionResponse,
+  SystemConfig,
   ToneAnalysis,
   UpdateDraftRequest,
+  UpdateSystemConfigRequest,
   UserExportData,
   UserProfile,
 } from '@safe-quill/shared';
@@ -381,6 +389,150 @@ export async function deleteAccountData(): Promise<{ success: boolean; message: 
 
   if (!res.ok) {
     throw new Error(`Failed to delete account: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+// ---------------- Phase 6: Feedback, Analytics & Admin ----------------
+
+export async function submitPredictionFeedback(
+  data: CreatePredictionFeedbackRequest,
+): Promise<{ success: boolean; message: string; feedbackId: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/feedback/prediction`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || 'Failed to submit prediction feedback');
+  }
+
+  return res.json();
+}
+
+export async function submitAiFeedback(
+  data: CreateAiFeedbackRequest,
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/feedback/ai`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to submit AI feedback: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchAdminAnalytics(): Promise<AnalyticsOverview> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/analytics`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch admin analytics: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchPendingFeedback(): Promise<PredictionFeedback[]> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/feedback`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch feedback review queue: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function markFeedbackReviewed(
+  id: string,
+): Promise<PredictionFeedback> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/feedback/${id}/review`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to mark feedback as reviewed: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchSystemConfig(): Promise<SystemConfig> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/config`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch system config: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function updateSystemConfig(
+  data: UpdateSystemConfigRequest,
+): Promise<SystemConfig> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/config`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || 'Failed to update system config');
+  }
+
+  return res.json();
+}
+
+export async function fetchMlMetrics(): Promise<MlMetrics> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/ml/metrics`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ML metrics: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function rollbackMlModel(
+  version: string,
+): Promise<{ success: boolean; activeVersion: string; message: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/ml/rollback`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to rollback model version: ${res.statusText}`);
   }
 
   return res.json();

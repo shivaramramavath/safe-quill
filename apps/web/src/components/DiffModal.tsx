@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Check,
   X,
@@ -9,9 +9,12 @@ import {
   Sparkles,
   Cpu,
   Loader2,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { RewriteEmailResponse } from '@safe-quill/shared';
 import { DiffSkeleton } from './Skeleton';
+import { submitAiFeedback } from '@/lib/api';
 
 interface DiffModalProps {
   isOpen: boolean;
@@ -30,7 +33,21 @@ export function DiffModal({
   onClose,
   onAccept,
 }: DiffModalProps) {
+  const [rated, setRated] = useState<'up' | 'down' | null>(null);
+
   if (!isOpen) return null;
+
+  const handleRate = async (rating: 'thumbs_up' | 'thumbs_down') => {
+    try {
+      setRated(rating === 'thumbs_up' ? 'up' : 'down');
+      await submitAiFeedback({
+        mode: rewriteData?.mode || 'rewrite',
+        rating,
+      });
+    } catch {
+      // Ignore
+    }
+  };
 
   const isSafeMode = rewriteData?.mode === 'safe';
   const displayText = isStreaming ? streamingText : rewriteData?.rewrittenText;
@@ -189,7 +206,36 @@ export function DiffModal({
             <span>Pasted email content was wrapped in untrusted delimiters and checked for prompt injections.</span>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
+            {/* AI Feedback Thumbs */}
+            <div className="flex items-center gap-1 border-r border-border pr-3">
+              <span className="text-[10px] uppercase font-mono text-muted-fg mr-1">Feedback:</span>
+              <button
+                type="button"
+                onClick={() => handleRate('thumbs_up')}
+                className={`p-1.5 rounded border transition-colors ${
+                  rated === 'up'
+                    ? 'border-fg bg-fg text-bg'
+                    : 'border-border text-muted-fg hover:text-fg hover:border-fg'
+                }`}
+                title="Good suggestion"
+              >
+                <ThumbsUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRate('thumbs_down')}
+                className={`p-1.5 rounded border transition-colors ${
+                  rated === 'down'
+                    ? 'border-fg bg-fg text-bg'
+                    : 'border-border text-muted-fg hover:text-fg hover:border-fg'
+                }`}
+                title="Poor suggestion"
+              >
+                <ThumbsDown className="h-3 w-3" />
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={onClose}

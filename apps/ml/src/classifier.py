@@ -37,6 +37,39 @@ class SpamClassifierService:
             print(f"Error loading model: {e}")
             return False
 
+    def list_available_versions(self) -> List[str]:
+        if not os.path.exists(MODELS_DIR):
+            return []
+        versions = []
+        for d in os.listdir(MODELS_DIR):
+            if os.path.isdir(os.path.join(MODELS_DIR, d)) and d.startswith("v"):
+                versions.append(d)
+        versions.sort(reverse=True)
+        return versions
+
+    def rollback_to_version(self, target_version: str) -> bool:
+        target_dir = os.path.join(MODELS_DIR, target_version)
+        if not os.path.exists(target_dir):
+            return False
+
+        try:
+            self.classifier = joblib.load(os.path.join(target_dir, "classifier.joblib"))
+            self.vectorizer = joblib.load(os.path.join(target_dir, "vectorizer.joblib"))
+            self.feature_names = self.vectorizer.get_feature_names_out()
+            self.version = target_version
+
+            current_meta_path = os.path.join(MODELS_DIR, "current.json")
+            with open(current_meta_path, "w") as f:
+                json.dump({
+                    "active_version": target_version,
+                    "path": target_dir,
+                }, f, indent=2)
+
+            return True
+        except Exception as e:
+            print(f"Rollback error: {e}")
+            return False
+
     def predict(self, text: str) -> Dict[str, Any]:
         if not self.classifier or not self.vectorizer:
             if not self.load_active_model():

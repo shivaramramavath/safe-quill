@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheck, ShieldAlert, Zap, Database } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Zap, Database, Flag } from 'lucide-react';
 import { RiskLevel, TokenWeight } from '@safe-quill/shared';
+import { useDraftStore } from '@/store/useDraftStore';
 
 interface ScoreMeterProps {
   score?: number;
@@ -25,6 +26,7 @@ export function ScoreMeter({
   topTokens = [],
   evidenceCount = 0,
 }: ScoreMeterProps) {
+  const { setIsReportFeedbackModalOpen } = useDraftStore();
   const blocks = 10;
   const filledBlocks = Math.round((score / 100) * blocks);
 
@@ -122,7 +124,18 @@ export function ScoreMeter({
       {/* Footer labels */}
       <div className="mt-2 flex items-center justify-between text-[11px] text-muted-fg font-mono">
         <span>0 SAFE</span>
-        <span>{isAnalyzing ? 'Analyzing email...' : 'Ready'}</span>
+        <div className="flex items-center gap-3">
+          <span>{isAnalyzing ? 'Analyzing email...' : 'Ready'}</span>
+          <button
+            type="button"
+            onClick={() => setIsReportFeedbackModalOpen(true)}
+            className="hover:text-fg underline flex items-center gap-1 transition-colors"
+            title="Report false positive or false negative"
+          >
+            <Flag className="h-3 w-3" />
+            <span>Report Verdict</span>
+          </button>
+        </div>
         <span>100 HIGH RISK</span>
       </div>
 

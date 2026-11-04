@@ -11,6 +11,8 @@ import { AuthModal } from '../components/AuthModal';
 import { SavedSessionsDrawer } from '../components/SavedSessionsDrawer';
 import { EmailReportModal } from '../components/EmailReportModal';
 import { AccountSettingsModal } from '../components/AccountSettingsModal';
+import { ReportFeedbackModal } from '../components/ReportFeedbackModal';
+import { AdminDashboardModal } from '../components/AdminDashboardModal';
 import { useDraftStore } from '../store/useDraftStore';
 import { clearSessionDraft, fetchCurrentUser, fetchSavedSessions } from '../lib/api';
 import { countWordsAndChars } from '../lib/utils';
@@ -103,6 +105,10 @@ export default function Home() {
       <SavedSessionsDrawer />
       <EmailReportModal />
       <AccountSettingsModal />
+
+      {/* Phase 6 Feedback & Admin Modals */}
+      <ReportFeedbackModal />
+      <AdminDashboardModal />
     </div>
   );
 }

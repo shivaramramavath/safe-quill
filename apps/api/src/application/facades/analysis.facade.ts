@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { performance } from 'perf_hooks';
 import { RiskAnalysisResult } from '@safe-quill/shared';
 import { ContentHashCacheService } from '../../infrastructure/cache/content-hash-cache.service';
 import { AnalysisPipeline } from '../pipeline/analysis.pipeline';
 import { AnalyzeDto } from '../dtos/analyze.dto';
+import { AnalyticsService } from '../services/analytics.service';
 
 @Injectable()
 export class AnalysisFacade {
@@ -12,6 +13,8 @@ export class AnalysisFacade {
   constructor(
     private readonly pipeline: AnalysisPipeline,
     private readonly cacheService: ContentHashCacheService,
+    @Optional()
+    private readonly analyticsService?: AnalyticsService,
   ) {}
 
   async analyze(dto: AnalyzeDto): Promise<RiskAnalysisResult> {
@@ -65,6 +68,9 @@ export class AnalysisFacade {
 
     // 3. Cache result in Redis
     await this.cacheService.setCache(contentHash, finalResult as any);
+
+    // 4. Record anonymized analytics
+    this.analyticsService?.recordScan(finalResult.level, finalResult.isSpam, finalResult.latencyMs);
 
     this.logger.log(
       `Analysis completed in ${latencyMs}ms: Score ${finalResult.score}/100 (${finalResult.level}) with ${finalResult.evidence.length} evidence findings.`,

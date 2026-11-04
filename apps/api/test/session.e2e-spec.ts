@@ -233,4 +233,89 @@ describe('SafeQuill E2E Acceptance Tests', () => {
       .set('Cookie', authCookie!)
       .expect(401); // Unauthorized because account was deleted
   });
+
+  it('Phase 6 Criteria: report wrong prediction (queued, never auto-retrained), AI thumbs, admin analytics, config, and ML dashboard', async () => {
+    // 1. Submit Wrong Prediction Report (False Positive)
+    const feedbackRes = await request(app.getHttpServer())
+      .post('/api/v1/feedback/prediction')
+      .send({
+        reportedLabel: 'ham',
+        reason: 'Legitimate internal payroll notification wrongly flagged as high risk',
+        contentHash: 'hash_payroll_q4',
+        originalScore: 82,
+        originalLevel: 'HIGH',
+      })
+      .expect(201);
+
+    expect(feedbackRes.body.success).toBe(true);
+    expect(feedbackRes.body.message).toContain('never logged or auto-retrained');
+    const feedbackId = feedbackRes.body.feedbackId;
+
+    // 2. Submit AI Thumbs Up
+    const aiFeedbackRes = await request(app.getHttpServer())
+      .post('/api/v1/feedback/ai')
+      .send({
+        mode: 'professional',
+        rating: 'thumbs_up',
+        comment: 'Polished tone with crisp phrasing',
+      })
+      .expect(201);
+
+    expect(aiFeedbackRes.body.success).toBe(true);
+
+    // 3. Admin Analytics: includes scans, latency, and pending feedback
+    const analyticsRes = await request(app.getHttpServer())
+      .get('/api/v1/admin/analytics')
+      .expect(200);
+
+    expect(analyticsRes.body.pendingFeedbackCount).toBeGreaterThanOrEqual(1);
+    expect(analyticsRes.body.avgLatencyMs).toBeDefined();
+
+    // 4. Admin Review Queue: review reported wrong prediction
+    const pendingList = await request(app.getHttpServer())
+      .get('/api/v1/admin/feedback')
+      .expect(200);
+
+    expect(pendingList.body.some((f: any) => f.id === feedbackId)).toBe(true);
+
+    // Mark as reviewed
+    const reviewRes = await request(app.getHttpServer())
+      .patch(`/api/v1/admin/feedback/${feedbackId}/review`)
+      .expect(200);
+
+    expect(reviewRes.body.reviewed).toBe(true);
+
+    // 5. Admin Dynamic Config: update thresholds & blocklists
+    const configRes = await request(app.getHttpServer())
+      .put('/api/v1/admin/config')
+      .send({
+        highThreshold: 80,
+        mediumThreshold: 45,
+        blockedDomains: ['custom-attacker.com'],
+      })
+      .expect(200);
+
+    expect(configRes.body.highThreshold).toBe(80);
+    expect(configRes.body.mediumThreshold).toBe(45);
+    expect(configRes.body.blockedDomains).toContain('custom-attacker.com');
+
+    // 6. ML Operations: inspect metrics, confusion matrix, and trigger rollback
+    const mlMetricsRes = await request(app.getHttpServer())
+      .get('/api/v1/admin/ml/metrics')
+      .expect(200);
+
+    expect(mlMetricsRes.body.accuracy).toBeGreaterThan(0.9);
+    expect(mlMetricsRes.body.confusionMatrix).toBeDefined();
+    expect(mlMetricsRes.body.confusionMatrix.tp).toBeGreaterThan(0);
+    expect(mlMetricsRes.body.activeModelVersion).toBe('v1.0.0');
+
+    // Rollback
+    const rollbackRes = await request(app.getHttpServer())
+      .post('/api/v1/admin/ml/rollback')
+      .send({ version: 'v1.0.0' })
+      .expect(201);
+
+    expect(rollbackRes.body.success).toBe(true);
+    expect(rollbackRes.body.activeVersion).toBe('v1.0.0');
+  });
 });

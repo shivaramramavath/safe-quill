@@ -24,6 +24,8 @@ import { RedactingLogger } from './infrastructure/logger/redacting-logger.servic
 import { MongoUserRepository } from './infrastructure/database/mongo/mongo-user.repository';
 import { MongoSavedSessionRepository } from './infrastructure/database/mongo/mongo-saved-session.repository';
 import { BrevoMailerAdapter } from './infrastructure/mailer/brevo-mailer.adapter';
+
+// Mongo Schemas
 import { User, UserSchema } from './infrastructure/database/mongo/schemas/user.schema';
 import {
   SavedSessionModel,
@@ -33,6 +35,22 @@ import {
   MagicToken,
   MagicTokenSchema,
 } from './infrastructure/database/mongo/schemas/magic-token.schema';
+import {
+  PredictionFeedbackModel,
+  PredictionFeedbackSchema,
+} from './infrastructure/database/mongo/schemas/prediction-feedback.schema';
+import {
+  AiFeedbackModel,
+  AiFeedbackSchema,
+} from './infrastructure/database/mongo/schemas/ai-feedback.schema';
+import {
+  SystemConfigModel,
+  SystemConfigSchema,
+} from './infrastructure/database/mongo/schemas/system-config.schema';
+import {
+  AuditLogModel,
+  AuditLogSchema,
+} from './infrastructure/database/mongo/schemas/audit-log.schema';
 
 // Services & Pipeline
 import { SessionService } from './application/services/session.service';
@@ -43,6 +61,9 @@ import { LangGraphAssistantService } from './infrastructure/llm/langgraph-assist
 import { AuthService } from './application/services/auth.service';
 import { SessionClaimService } from './application/services/session-claim.service';
 import { SavedSessionService } from './application/services/saved-session.service';
+import { FeedbackService } from './application/services/feedback.service';
+import { AdminConfigService } from './application/services/admin-config.service';
+import { AnalyticsService } from './application/services/analytics.service';
 
 // Detectors & Scoring
 import { DetectorFactory } from './domain/detectors/detector.factory';
@@ -63,6 +84,8 @@ import { AuthController } from './interfaces/controllers/auth.controller';
 import { SavedSessionController } from './interfaces/controllers/saved-session.controller';
 import { AccountController } from './interfaces/controllers/account.controller';
 import { MailerController } from './interfaces/controllers/mailer.controller';
+import { FeedbackController } from './interfaces/controllers/feedback.controller';
+import { AdminController } from './interfaces/controllers/admin.controller';
 import { GuestSessionInterceptor } from './interfaces/interceptors/guest-session.interceptor';
 import { JwtAuthGuard } from './interfaces/http/guards/jwt-auth.guard';
 
@@ -82,6 +105,10 @@ const mongoImports = process.env.MONGODB_URI
         { name: User.name, schema: UserSchema },
         { name: SavedSessionModel.name, schema: SavedSessionSchema },
         { name: MagicToken.name, schema: MagicTokenSchema },
+        { name: PredictionFeedbackModel.name, schema: PredictionFeedbackSchema },
+        { name: AiFeedbackModel.name, schema: AiFeedbackSchema },
+        { name: SystemConfigModel.name, schema: SystemConfigSchema },
+        { name: AuditLogModel.name, schema: AuditLogSchema },
       ]),
     ]
   : [];
@@ -119,6 +146,8 @@ const mongoImports = process.env.MONGODB_URI
     SavedSessionController,
     AccountController,
     MailerController,
+    FeedbackController,
+    AdminController,
   ],
   providers: [
     RedactingLogger,
@@ -130,6 +159,9 @@ const mongoImports = process.env.MONGODB_URI
     AuthService,
     SessionClaimService,
     SavedSessionService,
+    FeedbackService,
+    AdminConfigService,
+    AnalyticsService,
     DetectorFactory,
     CompositeRiskScorer,
     ContentHashCacheService,
@@ -191,6 +223,9 @@ const mongoImports = process.env.MONGODB_URI
     AuthService,
     SessionClaimService,
     SavedSessionService,
+    FeedbackService,
+    AdminConfigService,
+    AnalyticsService,
     SESSION_STORE_PORT,
     SPAM_CLASSIFIER_PORT,
     LLM_PORT,

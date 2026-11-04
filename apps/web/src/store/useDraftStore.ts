@@ -32,6 +32,10 @@ interface DraftStoreState {
   isReportModalOpen: boolean;
   isAccountModalOpen: boolean;
 
+  // Phase 6 Feedback & Admin State
+  isReportFeedbackModalOpen: boolean;
+  isAdminModalOpen: boolean;
+
   // Actions
   setSubject: (subject: string) => void;
   setBody: (body: string) => void;
@@ -45,6 +49,8 @@ interface DraftStoreState {
   setIsSavedDrawerOpen: (open: boolean) => void;
   setIsReportModalOpen: (open: boolean) => void;
   setIsAccountModalOpen: (open: boolean) => void;
+  setIsReportFeedbackModalOpen: (open: boolean) => void;
+  setIsAdminModalOpen: (open: boolean) => void;
   hydrateFromServer: (draft: DraftState) => void;
   loadSavedSession: (session: SavedSession) => void;
   resetDraft: () => void;
@@ -73,6 +79,8 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
   isSavedDrawerOpen: false,
   isReportModalOpen: false,
   isAccountModalOpen: false,
+  isReportFeedbackModalOpen: false,
+  isAdminModalOpen: false,
 
   setAnalysisResult: (result) => set({ analysisResult: result }),
   setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
@@ -82,6 +90,8 @@ export const useDraftStore = create<DraftStoreState>((set, get) => ({
   setIsSavedDrawerOpen: (open) => set({ isSavedDrawerOpen: open }),
   setIsReportModalOpen: (open) => set({ isReportModalOpen: open }),
   setIsAccountModalOpen: (open) => set({ isAccountModalOpen: open }),
+  setIsReportFeedbackModalOpen: (open) => set({ isReportFeedbackModalOpen: open }),
+  setIsAdminModalOpen: (open) => set({ isAdminModalOpen: open }),
 
   setSubject: (newSubject: string) => {
     const { subject, body, undoStack } = get();
