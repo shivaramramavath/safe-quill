@@ -51,7 +51,7 @@ class GhostWidget extends WidgetType {
     wrap.dataset.testid = 'ghost-suggestion';
     // Clear, readable ghost text styling (distinct from full opacity document text)
     wrap.style.color = 'var(--muted-fg, #9ca3af)';
-    wrap.style.opacity = '0.72';
+    wrap.style.opacity = '0.95';
     wrap.style.display = 'inline';
 
     // The ghost text string
