@@ -45,7 +45,7 @@ services:
     name: safequill-ml
     env: docker
     dockerfilePath: apps/ml/Dockerfile
-    dockerContext: apps/ml
+    dockerContext: .
     plan: free
     region: oregon
     envVars:

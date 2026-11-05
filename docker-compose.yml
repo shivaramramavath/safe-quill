@@ -39,8 +39,8 @@ services:
 
   ml:
     build:
-      context: apps/ml
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/ml/Dockerfile
     container_name: safequill-ml
     restart: unless-stopped
     ports:
