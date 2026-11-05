@@ -23,7 +23,7 @@ import {
   UserProfile,
 } from '@safe-quill/shared';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://safe-quill-api.onrender.com';
 
 export async function fetchCurrentSession(): Promise<SessionResponse> {
   const res = await fetch(`${API_BASE}/api/v1/session`, {
