@@ -1,0 +1,27 @@
+# Dependencies
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/venv
+
+# Build artifacts
+**/.next
+**/dist
+**/build
+**/.turbo
+
+# Git & IDE
+.git
+.gitignore
+.vscode
+.idea
+
+# Test & logs
+**/test-results
+**/playwright-report
+**/coverage
+**/*.log
+
+# Environment local files
+.env*.local

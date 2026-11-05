@@ -10,7 +10,7 @@ RUN pnpm install --frozen-lockfile || pnpm install
 RUN pnpm --filter @safe-quill/shared build
 RUN pnpm --filter @safe-quill/web build
 
-FROM node:20-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
