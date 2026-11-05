@@ -5,13 +5,18 @@ Calculates accuracy, precision, recall, F1, and Confusion Matrix.
 
 import os
 import json
+from pathlib import Path
 import joblib
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-from dataset import get_training_data
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
+try:
+    from src.spam.dataset import get_training_data
+    from src.core.config import SPAM_MODELS_DIR
+    MODELS_DIR = str(SPAM_MODELS_DIR)
+except ImportError:
+    from dataset import get_training_data
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    MODELS_DIR = str(BASE_DIR / "models")
 
 def evaluate_model():
     current_meta_path = os.path.join(MODELS_DIR, "current.json")

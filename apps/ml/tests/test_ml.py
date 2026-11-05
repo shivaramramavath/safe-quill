@@ -1,12 +1,16 @@
 import os
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+from pathlib import Path
+
+ML_ROOT = Path(__file__).resolve().parent.parent
+if str(ML_ROOT) not in sys.path:
+    sys.path.insert(0, str(ML_ROOT))
 
 import pytest
 from fastapi.testclient import TestClient
 
-from main import app
-from classifier import classifier_instance
+from src.api.main import app
+from src.spam.classifier import classifier_instance
 
 client = TestClient(app)
 

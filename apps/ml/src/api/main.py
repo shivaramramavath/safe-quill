@@ -2,54 +2,37 @@ import os
 import sys
 import time
 import json
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 
-# Ensure src and ghost packages are discoverable
-SRC_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_ROOT = os.path.dirname(SRC_DIR)
-for p in [SRC_DIR, APP_ROOT]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-from classifier import classifier_instance
-from ghost.predictor import GhostPredictor
+from src.api.schemas import (
+    PredictRequest,
+    PredictResponse,
+    SuggestRequest,
+    SuggestResponse,
+    SuggestionItem,
+    RollbackRequest,
+    HealthResponse,
+)
+from src.spam.classifier import classifier_instance
+from src.ghost.predictor import GhostPredictor
+from src.core.config import (
+    GHOST_SUGGEST_TIMEOUT_MS,
+    GHOST_MAX_CONTEXT_CHARS,
+    SPAM_MODELS_DIR,
+)
 
 app = FastAPI(title="SafeQuill ML Classifier & Ghost Text Service", version="1.0.0")
 ghost_predictor_instance = GhostPredictor()
 
-class PredictRequest(BaseModel):
-    text: str
-
-class TokenContribution(BaseModel):
-    token: str
-    weight: float
-
-class PredictResponse(BaseModel):
-    label: str
-    confidence: float
-    score: int
-    level: str
-    top_tokens: List[TokenContribution]
-    model_version: str
-
-class SuggestRequest(BaseModel):
-    context: str = Field(..., max_length=600)
-    top_k: int = 3
-
-class SuggestionItem(BaseModel):
-    completion: str
-    confidence: float
-
-class SuggestResponse(BaseModel):
-    model: str
-    suggestions: List[SuggestionItem]
-
 @app.post("/suggest", response_model=SuggestResponse)
 def suggest_next_word(req: SuggestRequest) -> SuggestResponse:
-    if len(req.context) > 600:
-        raise HTTPException(status_code=400, detail="Context exceeds maximum length of 600 characters.")
+    if len(req.context) > GHOST_MAX_CONTEXT_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Context exceeds maximum length of {GHOST_MAX_CONTEXT_CHARS} characters."
+        )
 
     start_time = time.perf_counter()
     top_k = min(max(req.top_k, 1), 5)
@@ -59,7 +42,7 @@ def suggest_next_word(req: SuggestRequest) -> SuggestResponse:
         elapsed_ms = (time.perf_counter() - start_time) * 1000
 
         # Server-side 50 ms time budget: return empty list on timeout
-        if elapsed_ms > 50.0:
+        if elapsed_ms > float(GHOST_SUGGEST_TIMEOUT_MS):
             return SuggestResponse(model=ghost_predictor_instance.version, suggestions=[])
 
         return SuggestResponse(
@@ -69,47 +52,40 @@ def suggest_next_word(req: SuggestRequest) -> SuggestResponse:
     except Exception:
         return SuggestResponse(model=ghost_predictor_instance.version, suggestions=[])
 
-@app.get("/health")
-def health_check() -> Dict[str, Any]:
+@app.get("/health", response_model=HealthResponse)
+def health_check() -> HealthResponse:
     active = classifier_instance.classifier is not None
-    return {
-        "status": "healthy" if active else "initializing",
-        "version": classifier_instance.version,
-        "model_loaded": active,
-    }
+    return HealthResponse(
+        status="healthy" if active else "initializing",
+        version=classifier_instance.version,
+        model_loaded=active,
+    )
 
 @app.get("/model-info")
 def model_info() -> Dict[str, Any]:
-    meta_path = os.path.join(
-        os.path.dirname(__file__), "models", classifier_instance.version, "metadata.json"
-    )
-    if os.path.exists(meta_path):
-        with open(meta_path, "r") as f:
+    meta_path = Path(classifier_instance.models_dir) / classifier_instance.version / "metadata.json"
+    if meta_path.exists():
+        with open(meta_path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {
         "version": classifier_instance.version,
         "status": "active",
     }
 
-class RollbackRequest(BaseModel):
-    version: str
-
 @app.get("/metrics")
 def get_metrics() -> Dict[str, Any]:
-    meta_path = os.path.join(
-        os.path.dirname(__file__), "models", classifier_instance.version, "metadata.json"
-    )
+    meta_path = Path(classifier_instance.models_dir) / classifier_instance.version / "metadata.json"
     meta = {}
-    if os.path.exists(meta_path):
-        with open(meta_path, "r") as f:
+    if meta_path.exists():
+        with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
 
     # In case evaluation file exists
-    eval_path = os.path.join(os.path.dirname(__file__), "models", "evaluation_summary.json")
+    eval_path = Path(classifier_instance.models_dir) / "evaluation_summary.json"
     cm = {"true_negative": 3605, "false_positive": 67, "false_negative": 2, "true_positive": 1507}
-    if os.path.exists(eval_path):
+    if eval_path.exists():
         try:
-            with open(eval_path, "r") as f:
+            with open(eval_path, "r", encoding="utf-8") as f:
                 eval_data = json.load(f)
                 cm = eval_data.get("confusion_matrix", cm)
         except Exception:

@@ -1,19 +1,17 @@
 import os
 import sys
+from pathlib import Path
 
-TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-ML_DIR = os.path.dirname(TESTS_DIR)
-SRC_DIR = os.path.join(ML_DIR, 'src')
-for p in [SRC_DIR, ML_DIR]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
+ML_DIR = Path(__file__).resolve().parent.parent
+if str(ML_DIR) not in sys.path:
+    sys.path.insert(0, str(ML_DIR))
 
 import pytest
 from fastapi.testclient import TestClient
 
-from main import app
-from ghost.preprocess import tokenize_words, clean_and_normalize, strip_email_structural_cruft
-from ghost.predictor import GhostPredictor
+from src.api.main import app
+from src.ghost.preprocess import tokenize_words, clean_and_normalize, strip_email_structural_cruft
+from src.ghost.predictor import GhostPredictor
 
 client = TestClient(app)
 

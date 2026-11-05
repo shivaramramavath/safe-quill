@@ -8,16 +8,29 @@ import os
 import sys
 import json
 import re
-from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional, Any
+from pathlib import Path
 
 try:
-    from .preprocess import PLACEHOLDERS
+    from src.core.ports import NextWordPort
+    from src.core.config import GHOST_MODELS_DIR, GHOST_CONFIDENCE_THRESHOLD, GHOST_MIN_NEXT_WORD_PROB
+    from src.ghost.preprocess import PLACEHOLDERS
 except ImportError:
     try:
-        from preprocess import PLACEHOLDERS
-    except ImportError:
+        from core.ports import NextWordPort
+        from core.config import GHOST_MODELS_DIR, GHOST_CONFIDENCE_THRESHOLD, GHOST_MIN_NEXT_WORD_PROB
         from ghost.preprocess import PLACEHOLDERS
+    except ImportError:
+        BASE_DIR = Path(__file__).resolve().parent.parent.parent
+        GHOST_MODELS_DIR = BASE_DIR / "models" / "ghost"
+        GHOST_CONFIDENCE_THRESHOLD = 0.20
+        GHOST_MIN_NEXT_WORD_PROB = 0.15
+        from abc import ABC, abstractmethod
+        class NextWordPort(ABC):
+            @abstractmethod
+            def suggest(self, context: str, top_k: int = 3) -> List[Dict[str, Any]]:
+                pass
+        PLACEHOLDERS = {'<email>', '<phone>', '<url>', '<num>', '<name>'}
 
 BLOCKLIST = {
     'password', 'otp', 'pin', 'cvv', 'account number', 'bank',
@@ -25,26 +38,43 @@ BLOCKLIST = {
     'routing', 'login', 'credentials', 'credit card', 'debit card',
 }
 
-class NextWordPort(ABC):
-    @abstractmethod
-    def suggest(self, context: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        """Predicts inline completions for the given text context."""
-        pass
-
 class GhostPredictor(NextWordPort):
     def __init__(self, model_path: Optional[str] = None):
         if model_path is None:
-            model_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "models",
-                "ngram_model.json",
-            )
-        self.model_path = model_path
+            # Check latest.json or ngram_model.json or ngram-*.json in GHOST_MODELS_DIR
+            latest_ptr = Path(GHOST_MODELS_DIR) / "latest.json"
+            if latest_ptr.exists():
+                try:
+                    with open(latest_ptr, "r", encoding="utf-8") as f:
+                        ptr_data = json.load(f)
+                    target = ptr_data.get("model_path")
+                    if target and os.path.exists(target):
+                        model_path = target
+                    elif target and (Path(GHOST_MODELS_DIR) / target).exists():
+                        model_path = str(Path(GHOST_MODELS_DIR) / target)
+                except Exception:
+                    pass
+
+            if model_path is None:
+                default_ngram = Path(GHOST_MODELS_DIR) / "ngram_model.json"
+                if default_ngram.exists():
+                    model_path = str(default_ngram)
+                else:
+                    # Look for any ngram-*.json
+                    candidates = list(Path(GHOST_MODELS_DIR).glob("ngram-*.json"))
+                    if candidates:
+                        model_path = str(candidates[0])
+                    else:
+                        model_path = str(default_ngram)
+
+        self.model_path = str(model_path)
         self.version = "unknown"
         self.alpha = 0.4
         self.own_table: Dict[str, Any] = {"trigrams": {}, "bigrams": {}, "unigrams": []}
         self.base_table: Dict[str, Any] = {"trigrams": {}, "bigrams": {}, "unigrams": []}
         self.casing_map: Dict[str, str] = {}
+        self.confidence_threshold = GHOST_CONFIDENCE_THRESHOLD
+        self.min_prob = GHOST_MIN_NEXT_WORD_PROB
         self.load_model()
 
     def load_model(self) -> bool:

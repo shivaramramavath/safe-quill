@@ -6,17 +6,23 @@ Trains TF-IDF + Logistic Regression with model versioning on disk.
 import os
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-from dataset import get_training_data
+try:
+    from src.spam.dataset import get_training_data
+    from src.core.config import SPAM_MODELS_DIR
+    MODELS_DIR = str(SPAM_MODELS_DIR)
+except ImportError:
+    from dataset import get_training_data
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    MODELS_DIR = str(BASE_DIR / "models")
 
 MODEL_VERSION = "v1.0.0"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
 VERSION_DIR = os.path.join(MODELS_DIR, MODEL_VERSION)
 
 def train_and_export():

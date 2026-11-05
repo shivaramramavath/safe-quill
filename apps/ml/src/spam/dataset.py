@@ -7,9 +7,14 @@ with fallback to curated phishing samples.
 import os
 import csv
 from typing import List, Tuple
+from pathlib import Path
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_PATH = os.path.join(BASE_DIR, "data", "spam_ham_dataset.csv")
+try:
+    from src.core.config import SPAM_DATASET_PATH, DATA_DIR
+    CSV_PATH = str(SPAM_DATASET_PATH)
+except ImportError:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    CSV_PATH = str(BASE_DIR / "data" / "spam_ham_dataset.csv")
 
 CURATED_PHISHING: List[Tuple[str, int]] = [
     ("URGENT: Your bank account has been suspended due to suspicious activity. Verify immediately at http://secure-login.xyz", 1),

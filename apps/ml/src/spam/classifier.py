@@ -6,12 +6,20 @@ import os
 import json
 import joblib
 from typing import Dict, List, Any, Optional
+from pathlib import Path
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
+try:
+    from src.core.config import SPAM_MODELS_DIR, MODELS_DIR
+    from src.core.ports import SpamClassifierPort
+except ImportError:
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    MODELS_DIR = BASE_DIR / "models"
+    SPAM_MODELS_DIR = MODELS_DIR
+    SpamClassifierPort = object
 
-class SpamClassifierService:
-    def __init__(self):
+class SpamClassifierService(SpamClassifierPort):
+    def __init__(self, models_dir: Optional[Path] = None):
+        self.models_dir = str(models_dir or SPAM_MODELS_DIR)
         self.version = "unknown"
         self.classifier = None
         self.vectorizer = None
@@ -19,16 +27,25 @@ class SpamClassifierService:
         self.load_active_model()
 
     def load_active_model(self) -> bool:
-        current_path = os.path.join(MODELS_DIR, "current.json")
+        current_path = os.path.join(self.models_dir, "current.json")
         if not os.path.exists(current_path):
             return False
 
         try:
-            with open(current_path, "r") as f:
+            with open(current_path, "r", encoding="utf-8") as f:
                 current_meta = json.load(f)
 
-            version_dir = current_meta["path"]
-            self.version = current_meta["active_version"]
+            self.version = current_meta.get("active_version", "unknown")
+            stored_path = current_meta.get("path", self.version)
+
+            if os.path.isabs(stored_path) and os.path.exists(stored_path):
+                version_dir = stored_path
+            else:
+                version_dir = os.path.join(self.models_dir, self.version)
+
+            if not os.path.exists(version_dir):
+                return False
+
             self.classifier = joblib.load(os.path.join(version_dir, "classifier.joblib"))
             self.vectorizer = joblib.load(os.path.join(version_dir, "vectorizer.joblib"))
             self.feature_names = self.vectorizer.get_feature_names_out()
@@ -38,17 +55,17 @@ class SpamClassifierService:
             return False
 
     def list_available_versions(self) -> List[str]:
-        if not os.path.exists(MODELS_DIR):
+        if not os.path.exists(self.models_dir):
             return []
         versions = []
-        for d in os.listdir(MODELS_DIR):
-            if os.path.isdir(os.path.join(MODELS_DIR, d)) and d.startswith("v"):
+        for d in os.listdir(self.models_dir):
+            if os.path.isdir(os.path.join(self.models_dir, d)) and d.startswith("v"):
                 versions.append(d)
         versions.sort(reverse=True)
         return versions
 
     def rollback_to_version(self, target_version: str) -> bool:
-        target_dir = os.path.join(MODELS_DIR, target_version)
+        target_dir = os.path.join(self.models_dir, target_version)
         if not os.path.exists(target_dir):
             return False
 
@@ -58,11 +75,11 @@ class SpamClassifierService:
             self.feature_names = self.vectorizer.get_feature_names_out()
             self.version = target_version
 
-            current_meta_path = os.path.join(MODELS_DIR, "current.json")
-            with open(current_meta_path, "w") as f:
+            current_meta_path = os.path.join(self.models_dir, "current.json")
+            with open(current_meta_path, "w", encoding="utf-8") as f:
                 json.dump({
                     "active_version": target_version,
-                    "path": target_dir,
+                    "path": target_version,
                 }, f, indent=2)
 
             return True
