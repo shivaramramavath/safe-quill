@@ -178,19 +178,51 @@ export class CircuitBreakerLlm implements LlmPort {
   }
 
   private emergencySummarizeFallback(dto: SummarizeRequest): SummarizeResponse {
-    const sentences = dto.text.trim().split(/(?<=[.?!])\s+/);
-    const substantive = sentences.filter(
-      (s) => s.trim().length > 10 && !/^(dear|hello|hi|hey|subject:)/i.test(s.trim()),
-    );
-    const firstSentence = substantive[0] || sentences[0] || 'Summary unavailable.';
+    const rawClean = dto.text
+      .replace(/^subject:\s*.*$/gim, '')
+      .replace(/^(dear|hello|hi|hey|greetings)\b[^\n,.]*[,.]?/gim, '')
+      .trim();
+    const sentences = rawClean
+      .split(/(?<=[.?!])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 5);
 
-    let summary = `Overview: ${firstSentence}`;
+    const substantive = sentences.filter(
+      (s) => s.length > 10 && !/^(best regards|sincerely|thanks|cheers|warm regards)/i.test(s),
+    );
+    const mainIdea = substantive[0] || sentences[0] || 'Email overview unavailable.';
+
+    const dates = dto.text.match(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b/gi) || [];
+    const amounts = dto.text.match(/[\$€£]\s?\d+(?:,\d{3})*(?:\.\d{2})?|\b\d+\s?(?:USD|EUR|GBP|INR|dollars|cents)\b/gi) || [];
+    const links = dto.safeSummary ? [] : (dto.text.match(/https?:\/\/\S+/g) || []);
+    const nameMatches = Array.from(new Set(dto.text.match(/\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b/g) || []))
+      .filter((n) => !['Dear Recipient', 'Best Regards', 'Safe Quill', 'Sincerely Yours', 'Recipient Name', 'Expression Of Interest'].includes(n));
+
+    let summary = `Overview: ${mainIdea}`;
+    let actionItems: Array<{ owner?: string; task: string; deadline?: string }> | undefined;
+    let keyFacts: { dates: string[]; amounts: string[]; names: string[]; links: string[] } | undefined;
+
     if (dto.mode === 'tldr') {
-      summary = `TL;DR: ${firstSentence}`;
+      summary = `TL;DR: ${mainIdea}`;
     } else if (dto.mode === 'short') {
-      summary = (substantive.length >= 2 ? substantive.slice(0, 3) : sentences.slice(0, 3))
-        .map((s) => `• ${s.trim()}`)
-        .join('\n');
+      const bullets = (substantive.length >= 2 ? substantive.slice(0, 3) : sentences.slice(0, 3))
+        .map((s) => `• ${s}`);
+      summary = bullets.join('\n');
+    } else if (dto.mode === 'key_facts') {
+      keyFacts = { dates, amounts, names: nameMatches, links };
+      const bullets: string[] = [];
+      if (nameMatches.length) bullets.push(`• Key Entities: ${nameMatches.join(', ')}`);
+      if (dates.length) bullets.push(`• Dates: ${dates.join(', ')}`);
+      if (amounts.length) bullets.push(`• Amounts: ${amounts.join(', ')}`);
+      if (links.length) bullets.push(`• Links: ${links.join(', ')}`);
+      summary = bullets.length > 0 ? bullets.join('\n') : `• Core Focus: ${mainIdea}`;
+    } else if (dto.mode === 'action_items') {
+      actionItems = [
+        { owner: 'Recipient', task: 'Review email context and respond if required', deadline: 'Standard' },
+      ];
+      summary = `• [Recipient] Review email context and respond if required`;
+    } else if (dto.mode === 'detailed') {
+      summary = `The email pertains to "${mainIdea.slice(0, 120)}". Key context from message: ${substantive.slice(0, 2).join(' ')}`;
     }
 
     return {
@@ -199,8 +231,10 @@ export class CircuitBreakerLlm implements LlmPort {
       intent: 'General Communication',
       tone: 'Neutral',
       language: 'English',
-      readingTimeMin: 1,
+      readingTimeMin: Math.max(1, Math.ceil(dto.text.trim().split(/\s+/).length / 200)),
       safetyNote: dto.safeSummary ? 'Safe summary mode enabled (circuit breaker active).' : undefined,
+      actionItems,
+      keyFacts,
     };
   }
 

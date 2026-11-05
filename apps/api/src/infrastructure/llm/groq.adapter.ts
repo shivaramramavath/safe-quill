@@ -481,23 +481,29 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
             ? 'Extract all key facts in JSON: {"keyFacts": {"dates": [...], "amounts": [...], "names": [...], "links": [...]}}'
             : 'Provide a detailed, well-structured paragraph summary.';
 
+        const isJsonMode = dto.mode === 'action_items' || dto.mode === 'key_facts';
+        const requestPayload: any = {
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: `You are an email analysis and summarization specialist. ${modeInstruction} Return plain text for tldr/short/detailed, or valid JSON for action_items/key_facts. Do NOT repeat or echo the email. Provide only the concise analysis/summary.`,
+            },
+            {
+              role: 'user',
+              content: `Please analyze and summarize the following email content:\n\n${LlmPromptGuard.wrapUntrustedContent(chunks[0])}`,
+            },
+          ],
+          temperature: 0.2,
+        };
+        if (isJsonMode) {
+          requestPayload.response_format = { type: 'json_object' };
+        }
+
         const response = await fetch(this.apiUrl, {
           method: 'POST',
           headers: this.getHeaders(),
-          body: JSON.stringify({
-            model: this.model,
-            messages: [
-              {
-                role: 'system',
-                content: `You are an email analysis and summarization specialist. ${modeInstruction} Return plain text for tldr/short/detailed, or JSON for action_items/key_facts.`,
-              },
-              {
-                role: 'user',
-                content: LlmPromptGuard.wrapUntrustedContent(chunks[0]),
-              },
-            ],
-            temperature: 0.2,
-          }),
+          body: JSON.stringify(requestPayload),
         });
 
         if (response.ok) {
@@ -508,19 +514,34 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
           let parsedKeyFacts;
           let displaySummary = content;
 
-          if (dto.mode === 'action_items') {
+          const extractJson = (raw: string): any => {
+            const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
             try {
-              const parsed = JSON.parse(content);
+              return JSON.parse(cleaned);
+            } catch {
+              const match = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+              if (match) {
+                try {
+                  return JSON.parse(match[0]);
+                } catch {}
+              }
+            }
+            return null;
+          };
+
+          if (dto.mode === 'action_items') {
+            const parsed = extractJson(content);
+            if (parsed) {
               parsedActionItems = parsed.actionItems || (Array.isArray(parsed) ? parsed : undefined);
               if (Array.isArray(parsedActionItems) && parsedActionItems.length > 0) {
                 displaySummary = parsedActionItems
                   .map((it: any) => `• [${it.owner || 'Action'}] ${it.task}${it.deadline ? ` (Due: ${it.deadline})` : ''}`)
                   .join('\n');
               }
-            } catch {}
+            }
           } else if (dto.mode === 'key_facts') {
-            try {
-              const parsed = JSON.parse(content);
+            const parsed = extractJson(content);
+            if (parsed) {
               parsedKeyFacts = parsed.keyFacts || parsed;
               const bullets: string[] = [];
               if (parsedKeyFacts.names?.length) bullets.push(`• People & Entities: ${parsedKeyFacts.names.join(', ')}`);
@@ -532,7 +553,7 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
               } else {
                 displaySummary = 'No prominent dates, amounts, or entities detected in the text.';
               }
-            } catch {}
+            }
           }
 
           return {

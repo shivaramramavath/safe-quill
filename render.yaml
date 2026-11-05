@@ -1,0 +1,60 @@
+services:
+  # 1. NestJS API Service
+  - type: web
+    name: safequill-api
+    env: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: REDIS_HOST
+        value: safequill-redis
+      - key: REDIS_PORT
+        value: 6379
+      - key: ML_SERVICE_URL
+        value: http://safequill-ml:8000
+      - key: GROQ_API_KEY
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  # 2. Next.js Web Frontend
+  - type: web
+    name: safequill-web
+    env: docker
+    dockerfilePath: apps/web/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: safequill-api
+          property: host
+
+  # 3. FastAPI ML Service
+  - type: web
+    name: safequill-ml
+    env: docker
+    dockerfilePath: apps/ml/Dockerfile
+    dockerContext: apps/ml
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8000
+
+  # 4. Redis Cache / Session Store
+  - type: redis
+    name: safequill-redis
+    plan: free
+    region: oregon
+    ipAllowList: []

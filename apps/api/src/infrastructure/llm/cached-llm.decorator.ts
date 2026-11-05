@@ -94,7 +94,9 @@ export class CachedLlmDecorator implements LlmPort {
 
     if (this.inner.summarizeRich) {
       const result = await this.inner.summarizeRich(dto);
-      this.setMemory(key, result, 3600);
+      if (!result.safetyNote?.includes('circuit breaker active')) {
+        this.setMemory(key, result, 3600);
+      }
       return result;
     }
 
