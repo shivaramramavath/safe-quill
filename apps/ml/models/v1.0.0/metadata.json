@@ -1,6 +1,6 @@
 {
   "version": "v1.0.0",
-  "created_at": "2026-11-04T17:50:37.554281+00:00",
+  "created_at": "2026-11-05T08:15:17.319840+00:00",
   "algorithm": "TF-IDF + Logistic Regression",
   "vocabulary_size": 5000,
   "metrics": {

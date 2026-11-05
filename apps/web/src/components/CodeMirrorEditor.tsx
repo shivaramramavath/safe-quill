@@ -46,9 +46,13 @@ class GhostWidget extends WidgetType {
   toDOM() {
     const wrap = document.createElement('span');
     wrap.className =
-      'cm-ghost-text text-muted-fg/60 select-none pointer-events-none font-mono text-sm leading-relaxed';
+      'cm-ghost-text select-none pointer-events-none font-mono text-sm leading-relaxed';
     wrap.setAttribute('aria-hidden', 'true');
     wrap.dataset.testid = 'ghost-suggestion';
+    // Distinctly dim styling for unaccepted ghost text
+    wrap.style.color = 'var(--muted, #888888)';
+    wrap.style.opacity = '0.45';
+    wrap.style.display = 'inline';
 
     // The ghost text string
     const textNode = document.createTextNode(this.text);
@@ -58,8 +62,9 @@ class GhostWidget extends WidgetType {
     if (this.showTabBadge) {
       const badge = document.createElement('span');
       badge.className =
-        'ml-1.5 inline-flex items-center px-1.5 py-0.2 rounded border border-border bg-muted/30 text-[10px] font-mono font-medium text-fg shadow-xs';
+        'cm-ghost-badge ml-1.5 inline-flex items-center px-1.5 py-0.2 rounded border border-border bg-muted/30 text-[10px] font-mono font-medium text-fg shadow-xs';
       badge.textContent = 'Tab ⇥';
+      badge.style.opacity = '0.9';
       wrap.appendChild(badge);
     }
 
@@ -330,6 +335,15 @@ export function CodeMirrorEditor({
       '.cm-placeholder': {
         color: 'var(--muted)',
         opacity: '0.6',
+      },
+      '.cm-ghost-text': {
+        color: 'var(--muted, #888888) !important',
+        opacity: '0.45 !important',
+        userSelect: 'none',
+        pointerEvents: 'none',
+      },
+      '.cm-ghost-text .cm-ghost-badge': {
+        opacity: '0.9 !important',
       },
       '.cm-line': {
         padding: '0',

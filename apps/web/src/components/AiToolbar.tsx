@@ -14,6 +14,35 @@ import { RewriteMode } from '@safe-quill/shared';
 import { useDraftStore } from '../store/useDraftStore';
 import { EMAIL_SAMPLES } from '../lib/samples';
 
+const TRANSLATE_LANGUAGES = [
+  'Spanish',
+  'French',
+  'German',
+  'Hindi',
+  'Japanese',
+  'Chinese (Simplified)',
+  'Chinese (Traditional)',
+  'Arabic',
+  'Portuguese',
+  'Italian',
+  'Russian',
+  'Korean',
+  'Dutch',
+  'Turkish',
+  'Polish',
+  'Swedish',
+  'Vietnamese',
+  'Indonesian',
+  'Telugu',
+  'Tamil',
+  'Bengali',
+  'Marathi',
+  'Urdu',
+  'Greek',
+  'Hebrew',
+  'Thai',
+];
+
 interface AiToolbarProps {
   onRewrite: (mode: RewriteMode) => void;
   onAiAction: (action: string, targetLanguage?: string) => void;
@@ -174,18 +203,18 @@ export function AiToolbar({
                 Generate Reply
               </button>
               <div className="border-t border-border my-1" />
-              <div className="px-2 py-1 flex items-center justify-between text-[11px]">
-                <span>Translate:</span>
+              <div className="px-2 py-1.5 flex items-center justify-between text-[11px] gap-2">
+                <span className="text-muted-fg font-medium">Translate:</span>
                 <select
                   value={selectedLang}
                   onChange={(e) => setSelectedLang(e.target.value)}
-                  className="p-0.5 border border-border bg-bg rounded text-[10px]"
+                  className="p-1 border border-border bg-bg text-fg rounded text-[11px] font-sans focus:outline-none focus:border-fg max-w-[145px] cursor-pointer"
                 >
-                  <option value="Spanish">Spanish</option>
-                  <option value="French">French</option>
-                  <option value="German">German</option>
-                  <option value="Hindi">Hindi</option>
-                  <option value="Japanese">Japanese</option>
+                  {TRANSLATE_LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang}
+                    </option>
+                  ))}
                 </select>
               </div>
               <button
@@ -194,9 +223,9 @@ export function AiToolbar({
                   setShowActions(false);
                   onAiAction('translate', selectedLang);
                 }}
-                className="w-full text-left px-2 py-1 hover:bg-muted rounded text-[11px] font-semibold"
+                className="w-full text-left px-2 py-1.5 hover:bg-muted rounded text-[11px] font-semibold flex items-center justify-between transition-colors"
               >
-                Translate to {selectedLang}
+                <span>Translate to {selectedLang}</span>
               </button>
             </div>
           )}
