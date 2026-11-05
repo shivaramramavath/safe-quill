@@ -428,6 +428,52 @@ export function RightPanel() {
                   </div>
                 )}
 
+                {summaryResult.keyFacts && (
+                  <div className="border-t border-border pt-2 flex flex-col gap-2 font-mono text-xs">
+                    <span className="font-bold uppercase text-[10px] text-muted-fg">Key Facts Detected:</span>
+                    {summaryResult.keyFacts.names && summaryResult.keyFacts.names.length > 0 && (
+                      <div>
+                        <span className="text-muted-fg text-[10px] block">People & Entities:</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {summaryResult.keyFacts.names.map((n, i) => (
+                            <span key={i} className="border border-border bg-bg px-1.5 py-0.5 rounded text-[11px] font-medium">{n}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {summaryResult.keyFacts.dates && summaryResult.keyFacts.dates.length > 0 && (
+                      <div>
+                        <span className="text-muted-fg text-[10px] block">Dates & Deadlines:</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {summaryResult.keyFacts.dates.map((d, i) => (
+                            <span key={i} className="border border-border bg-bg px-1.5 py-0.5 rounded text-[11px]">{d}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {summaryResult.keyFacts.amounts && summaryResult.keyFacts.amounts.length > 0 && (
+                      <div>
+                        <span className="text-muted-fg text-[10px] block">Amounts & Values:</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {summaryResult.keyFacts.amounts.map((a, i) => (
+                            <span key={i} className="border border-border bg-bg px-1.5 py-0.5 rounded text-[11px]">{a}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {summaryResult.keyFacts.links && summaryResult.keyFacts.links.length > 0 && (
+                      <div>
+                        <span className="text-muted-fg text-[10px] block">Links & Domains:</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {summaryResult.keyFacts.links.map((l, i) => (
+                            <span key={i} className="border border-border bg-bg px-1.5 py-0.5 rounded text-[11px] font-mono break-all">{l}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {

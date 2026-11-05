@@ -1,9 +1,14 @@
 import { Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import {
+  AiActionRequest,
+  AiActionResponse,
+  GenerateDraftRequest,
   GrammarFix,
   RewriteMode,
   RiskEvidence,
+  SummarizeRequest,
+  SummarizeResponse,
   ToneAnalysis,
 } from '@safe-quill/shared';
 import {
@@ -77,6 +82,59 @@ export class CachedLlmDecorator implements LlmPort {
 
   async completeInline(text: string): Promise<string> {
     return this.inner.completeInline(text);
+  }
+
+  async summarizeRich(dto: SummarizeRequest): Promise<SummarizeResponse> {
+    const key = this.hashKey(`summary:${dto.mode}:${dto.safeSummary ? 'safe' : 'raw'}`, dto.text);
+    const cached = this.getMemory<SummarizeResponse>(key);
+    if (cached) {
+      this.logger.debug(`Cache hit for summarizeRich (${dto.mode})`);
+      return cached;
+    }
+
+    if (this.inner.summarizeRich) {
+      const result = await this.inner.summarizeRich(dto);
+      this.setMemory(key, result, 3600);
+      return result;
+    }
+
+    const simple = await this.inner.summarize(dto.text);
+    const fallbackRes: SummarizeResponse = {
+      summary: simple,
+      mode: dto.mode,
+      intent: 'General Communication',
+      tone: 'Neutral',
+      language: 'English',
+      readingTimeMin: 1,
+    };
+    this.setMemory(key, fallbackRes, 3600);
+    return fallbackRes;
+  }
+
+  async generateDraft(
+    dto: GenerateDraftRequest,
+  ): Promise<{ drafts: Array<{ subject: string; body: string }> }> {
+    if (this.inner.generateDraft) {
+      return this.inner.generateDraft(dto);
+    }
+    return {
+      drafts: [
+        {
+          subject: dto.currentSubject || `Regarding: ${dto.prompt.slice(0, 35)}`,
+          body: `Hello,\n\nI am contacting you regarding ${dto.prompt}.\n\nBest regards,\nSafeQuill User`,
+        },
+      ],
+    };
+  }
+
+  async executeAction(dto: AiActionRequest): Promise<AiActionResponse> {
+    if (this.inner.executeAction) {
+      return this.inner.executeAction(dto);
+    }
+    return {
+      resultText: dto.text,
+      explanation: `Action "${dto.action}" executed.`,
+    };
   }
 
   private getMemory<T>(key: string): T | null {

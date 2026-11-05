@@ -1,6 +1,6 @@
 try {
   const fs = require('fs');
-  for (const envFile of ['.env.local', '.env', 'apps/api/.env']) {
+  for (const envFile of ['apps/api/.env', '.env.local', '.env']) {
     if (fs.existsSync(envFile)) {
       const content = fs.readFileSync(envFile, 'utf8');
       for (const line of content.split('\n')) {
@@ -157,7 +157,7 @@ const mongoImports =
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['apps/api/.env', '.env.local', '.env'],
     }),
     ThrottlerModule.forRoot([
       {

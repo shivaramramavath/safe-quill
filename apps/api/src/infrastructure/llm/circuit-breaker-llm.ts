@@ -1,8 +1,13 @@
 import { Logger } from '@nestjs/common';
 import {
+  AiActionRequest,
+  AiActionResponse,
+  GenerateDraftRequest,
   GrammarFix,
   RewriteMode,
   RiskEvidence,
+  SummarizeRequest,
+  SummarizeResponse,
   ToneAnalysis,
 } from '@safe-quill/shared';
 import {
@@ -144,5 +149,109 @@ export class CircuitBreakerLlm implements LlmPort {
 
   async completeInline(text: string): Promise<string> {
     return this.inner.completeInline(text);
+  }
+
+  async summarizeRich(dto: SummarizeRequest): Promise<SummarizeResponse> {
+    this.checkHalfOpen();
+    if (this.state === 'OPEN') {
+      return this.emergencySummarizeFallback(dto);
+    }
+    try {
+      if (this.inner.summarizeRich) {
+        const res = await this.inner.summarizeRich(dto);
+        this.recordSuccess();
+        return res;
+      }
+      const simple = await this.inner.summarize(dto.text);
+      return {
+        summary: simple,
+        mode: dto.mode,
+        intent: 'General Communication',
+        tone: 'Neutral',
+        language: 'English',
+        readingTimeMin: 1,
+      };
+    } catch (err: any) {
+      this.recordFailure(err);
+      return this.emergencySummarizeFallback(dto);
+    }
+  }
+
+  private emergencySummarizeFallback(dto: SummarizeRequest): SummarizeResponse {
+    const sentences = dto.text.trim().split(/(?<=[.?!])\s+/);
+    const substantive = sentences.filter(
+      (s) => s.trim().length > 10 && !/^(dear|hello|hi|hey|subject:)/i.test(s.trim()),
+    );
+    const firstSentence = substantive[0] || sentences[0] || 'Summary unavailable.';
+
+    let summary = `Overview: ${firstSentence}`;
+    if (dto.mode === 'tldr') {
+      summary = `TL;DR: ${firstSentence}`;
+    } else if (dto.mode === 'short') {
+      summary = (substantive.length >= 2 ? substantive.slice(0, 3) : sentences.slice(0, 3))
+        .map((s) => `• ${s.trim()}`)
+        .join('\n');
+    }
+
+    return {
+      summary,
+      mode: dto.mode,
+      intent: 'General Communication',
+      tone: 'Neutral',
+      language: 'English',
+      readingTimeMin: 1,
+      safetyNote: dto.safeSummary ? 'Safe summary mode enabled (circuit breaker active).' : undefined,
+    };
+  }
+
+  async generateDraft(
+    dto: GenerateDraftRequest,
+  ): Promise<{ drafts: Array<{ subject: string; body: string }> }> {
+    this.checkHalfOpen();
+    if (this.state === 'OPEN') {
+      return this.emergencyDraftFallback(dto);
+    }
+    try {
+      if (this.inner.generateDraft) {
+        const res = await this.inner.generateDraft(dto);
+        this.recordSuccess();
+        return res;
+      }
+      return this.emergencyDraftFallback(dto);
+    } catch (err: any) {
+      this.recordFailure(err);
+      return this.emergencyDraftFallback(dto);
+    }
+  }
+
+  private emergencyDraftFallback(dto: GenerateDraftRequest): { drafts: Array<{ subject: string; body: string }> } {
+    const subject = dto.currentSubject || `Regarding: ${dto.prompt.slice(0, 35)}`;
+    const body = `Dear ${dto.recipient || 'Team'},\n\nI am contacting you regarding ${dto.prompt}.\n\nPlease review and let me know your feedback.\n\nBest regards,\nSafeQuill User`;
+    return { drafts: [{ subject, body }] };
+  }
+
+  async executeAction(dto: AiActionRequest): Promise<AiActionResponse> {
+    this.checkHalfOpen();
+    if (this.state === 'OPEN') {
+      return this.emergencyActionFallback(dto);
+    }
+    try {
+      if (this.inner.executeAction) {
+        const res = await this.inner.executeAction(dto);
+        this.recordSuccess();
+        return res;
+      }
+      return this.emergencyActionFallback(dto);
+    } catch (err: any) {
+      this.recordFailure(err);
+      return this.emergencyActionFallback(dto);
+    }
+  }
+
+  private emergencyActionFallback(dto: AiActionRequest): AiActionResponse {
+    return {
+      resultText: dto.text,
+      explanation: `Action "${dto.action}" completed via circuit breaker fallback.`,
+    };
   }
 }

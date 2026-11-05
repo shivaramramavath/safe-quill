@@ -282,13 +282,18 @@ Instructions: Return ONLY the final rewritten email body. In SAFE mode, prepend 
 
   async summarize(text: string): Promise<string> {
     await this.assertNoInjection(text);
-    const sentences = text.trim().split(/(?<=[.?!])\s+/);
-    return sentences.slice(0, 2).join(' ') || text;
+    const rich = await this.summarizeRich({ text, mode: 'short' });
+    return rich.summary;
   }
 
   async translate(text: string, targetLanguage: string): Promise<string> {
     await this.assertNoInjection(text);
-    return `[${targetLanguage} Translation] ${text}`;
+    const action = await this.executeAction({
+      action: 'translate',
+      text,
+      targetLanguage,
+    });
+    return action.resultText;
   }
 
   async completeInline(text: string): Promise<string> {
@@ -504,21 +509,37 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
 
           let parsedActionItems;
           let parsedKeyFacts;
+          let displaySummary = content;
 
           if (dto.mode === 'action_items') {
             try {
               const parsed = JSON.parse(content);
-              parsedActionItems = parsed.actionItems;
+              parsedActionItems = parsed.actionItems || (Array.isArray(parsed) ? parsed : undefined);
+              if (Array.isArray(parsedActionItems) && parsedActionItems.length > 0) {
+                displaySummary = parsedActionItems
+                  .map((it: any) => `• [${it.owner || 'Action'}] ${it.task}${it.deadline ? ` (Due: ${it.deadline})` : ''}`)
+                  .join('\n');
+              }
             } catch {}
           } else if (dto.mode === 'key_facts') {
             try {
               const parsed = JSON.parse(content);
-              parsedKeyFacts = parsed.keyFacts;
+              parsedKeyFacts = parsed.keyFacts || parsed;
+              const bullets: string[] = [];
+              if (parsedKeyFacts.names?.length) bullets.push(`• People & Entities: ${parsedKeyFacts.names.join(', ')}`);
+              if (parsedKeyFacts.dates?.length) bullets.push(`• Dates & Deadlines: ${parsedKeyFacts.dates.join(', ')}`);
+              if (parsedKeyFacts.amounts?.length) bullets.push(`• Amounts & Figures: ${parsedKeyFacts.amounts.join(', ')}`);
+              if (parsedKeyFacts.links?.length) bullets.push(`• Links & Domains: ${parsedKeyFacts.links.join(', ')}`);
+              if (bullets.length > 0) {
+                displaySummary = bullets.join('\n');
+              } else {
+                displaySummary = 'No prominent dates, amounts, or entities detected in the text.';
+              }
             } catch {}
           }
 
           return {
-            summary: content,
+            summary: displaySummary,
             mode: dto.mode,
             intent,
             tone: detectedTone,
@@ -534,13 +555,37 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
       }
     }
 
-    // Deterministic fallback summary
+    // High quality deterministic fallback summary
     const sentences = workingText.split(/(?<=[.?!])\s+/);
-    let fallbackSummary = sentences.slice(0, 3).join(' ');
+    const substantive = sentences.filter(
+      (s) => s.trim().length > 10 && !/^(dear|hello|hi|hey|greetings|subject:)/i.test(s.trim()),
+    );
+    const firstSubstantive = substantive[0] || sentences[0] || 'Email overview unavailable.';
+
+    const dates = workingText.match(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b/gi) || [];
+    const amounts = workingText.match(/[\$€£]\s?\d+(?:,\d{3})*(?:\.\d{2})?|\b\d+\s?(?:USD|EUR|GBP|INR|dollars|cents)\b/gi) || [];
+    const links = dto.safeSummary ? [] : (workingText.match(/https?:\/\/\S+/g) || []);
+    const nameMatches = Array.from(new Set(workingText.match(/\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b/g) || []))
+      .filter((n) => !['Dear Recipient', 'Best Regards', 'Safe Quill', 'Sincerely Yours', 'Recipient Name', 'Expression Of Interest'].includes(n));
+
+    let fallbackSummary = `Summary: ${firstSubstantive}`;
     if (dto.mode === 'tldr') {
-      fallbackSummary = sentences[0] || 'Summary unavailable.';
+      fallbackSummary = `TL;DR: ${firstSubstantive}`;
     } else if (dto.mode === 'short') {
-      fallbackSummary = sentences.slice(0, 3).map((s) => `• ${s.trim()}`).join('\n');
+      const bullets = (substantive.length >= 2 ? substantive.slice(0, 3) : sentences.slice(0, 3))
+        .map((s) => `• ${s.trim()}`);
+      fallbackSummary = bullets.join('\n');
+    } else if (dto.mode === 'key_facts') {
+      const bullets: string[] = [];
+      if (nameMatches.length) bullets.push(`• Key Entities: ${nameMatches.join(', ')}`);
+      if (dates.length) bullets.push(`• Dates: ${dates.join(', ')}`);
+      if (amounts.length) bullets.push(`• Amounts: ${amounts.join(', ')}`);
+      if (links.length) bullets.push(`• Links: ${links.join(', ')}`);
+      fallbackSummary = bullets.length > 0 ? bullets.join('\n') : `• Core Focus: ${firstSubstantive}`;
+    } else if (dto.mode === 'action_items') {
+      fallbackSummary = `• Review email context and take appropriate action if requested.\n• Follow up on pending questions or deliverables.`;
+    } else {
+      fallbackSummary = `The email pertains to "${firstSubstantive.slice(0, 100)}...". Please review details for full context.`;
     }
 
     return {
@@ -559,10 +604,10 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
         },
       ],
       keyFacts: {
-        dates: (workingText.match(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g) || []),
-        amounts: (workingText.match(/[\$€£]\s?\d+(?:,\d{3})*(?:\.\d{2})?/g) || []),
-        names: [],
-        links: dto.safeSummary ? [] : (workingText.match(/https?:\/\/\S+/g) || []),
+        dates,
+        amounts,
+        names: nameMatches,
+        links,
       },
     };
   }
