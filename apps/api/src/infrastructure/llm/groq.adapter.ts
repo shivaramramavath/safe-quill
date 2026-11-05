@@ -31,13 +31,22 @@ export class GroqAdapter implements LlmPort {
   private readonly logger = new Logger(GroqAdapter.name);
   private readonly apiKey: string;
   private readonly apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  private readonly model = 'llama-3.3-70b-versatile';
+  private readonly model: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly promptInjectionDetector: PromptInjectionDetector,
   ) {
     this.apiKey = this.configService.get<string>('GROQ_API_KEY', '');
+    this.model = this.configService.get<string>('GROQ_MODEL', 'openai/gpt-oss-120b');
+  }
+
+  private getHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.apiKey}`,
+      'User-Agent': 'SafeQuill-App/1.0',
+    };
   }
 
   private async assertNoInjection(text: string): Promise<void> {
@@ -104,10 +113,7 @@ Instructions: Return ONLY the final rewritten email body. In SAFE mode, prepend 
 
     const response = await fetch(this.apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
+      headers: this.getHeaders(),
       body: JSON.stringify({
         model: this.model,
         messages: [
@@ -310,10 +316,7 @@ Instructions: Return ONLY the final rewritten email body. In SAFE mode, prepend 
 
         const response = await fetch(this.apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
+          headers: this.getHeaders(),
           body: JSON.stringify({
             model: this.model,
             messages: [
@@ -381,10 +384,7 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
 
         const response = await fetch(this.apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
+          headers: this.getHeaders(),
           body: JSON.stringify({
             model: this.model,
             messages: [
@@ -483,10 +483,7 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
 
         const response = await fetch(this.apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
+          headers: this.getHeaders(),
           body: JSON.stringify({
             model: this.model,
             messages: [
@@ -634,10 +631,7 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
       try {
         const response = await fetch(this.apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
+          headers: this.getHeaders(),
           body: JSON.stringify({
             model: this.model,
             messages: [
@@ -653,10 +647,16 @@ ${dto.variants ? '{"drafts": [{"subject": "...", "body": "..."}, {"subject": "..
 
         if (response.ok) {
           const data = await response.json();
-          const resultText = data.choices?.[0]?.message?.content?.trim() || dto.text;
+          let resultText = data.choices?.[0]?.message?.content?.trim() || dto.text;
+          if (resultText.startsWith('```') && resultText.endsWith('```')) {
+            resultText = resultText.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '').trim();
+          }
           return {
             resultText,
-            explanation: `Action "${dto.action}" completed via Llama 3.3.`,
+            explanation:
+              dto.action === 'translate'
+                ? `Translated to ${dto.targetLanguage || 'Spanish'} via Groq AI.`
+                : `Action "${dto.action}" completed via Groq AI.`,
           };
         }
       } catch (err: any) {

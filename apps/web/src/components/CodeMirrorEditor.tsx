@@ -49,9 +49,9 @@ class GhostWidget extends WidgetType {
       'cm-ghost-text select-none pointer-events-none font-mono text-sm leading-relaxed';
     wrap.setAttribute('aria-hidden', 'true');
     wrap.dataset.testid = 'ghost-suggestion';
-    // Distinctly dim styling for unaccepted ghost text
-    wrap.style.color = 'var(--muted, #888888)';
-    wrap.style.opacity = '0.45';
+    // Clear, readable ghost text styling (distinct from full opacity document text)
+    wrap.style.color = 'var(--muted-fg, #9ca3af)';
+    wrap.style.opacity = '0.72';
     wrap.style.display = 'inline';
 
     // The ghost text string
@@ -337,8 +337,8 @@ export function CodeMirrorEditor({
         opacity: '0.6',
       },
       '.cm-ghost-text': {
-        color: 'var(--muted, #888888) !important',
-        opacity: '0.45 !important',
+        color: 'var(--muted-fg, #9ca3af) !important',
+        opacity: '0.72 !important',
         userSelect: 'none',
         pointerEvents: 'none',
       },
