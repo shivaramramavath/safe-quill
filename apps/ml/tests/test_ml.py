@@ -15,11 +15,12 @@ from src.spam.classifier import classifier_instance
 client = TestClient(app)
 
 def test_health_endpoint():
-    response = client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert "status" in data
-    assert "version" in data
+    for path in ["/health", "/api/health", "/api/v1/health"]:
+        response = client.get(path)
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+        assert "version" in data
 
 def test_predict_spam_sample():
     payload = {

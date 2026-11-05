@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from '../../infrastructure/database/mongo/schemas/user.schema';
 import { SESSION_STORE_PORT, SessionStorePort } from '../../domain/ports/session-store.port';
 
-@Controller('health')
+@Controller(['health', 'api/health', 'api/v1/health'])
 export class HealthController {
   constructor(
     @Optional()

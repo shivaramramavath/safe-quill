@@ -413,6 +413,12 @@ describe('SafeQuill E2E Acceptance Tests', () => {
     expect(healthRes.body.security.rawEmailLogging).toContain('disabled');
     expect(healthRes.body.services).toBeDefined();
 
+    // Verify /api/health and /api/v1/health aliases
+    const apiHealthRes = await request(app.getHttpServer())
+      .get('/api/health')
+      .expect(200);
+    expect(apiHealthRes.body.status).toBe('ok');
+
     // Verify security headers from Helmet
     expect(healthRes.headers['x-content-type-options']).toBe('nosniff');
   });

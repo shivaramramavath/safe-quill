@@ -53,6 +53,8 @@ def suggest_next_word(req: SuggestRequest) -> SuggestResponse:
         return SuggestResponse(model=ghost_predictor_instance.version, suggestions=[])
 
 @app.get("/health", response_model=HealthResponse)
+@app.get("/api/health", response_model=HealthResponse)
+@app.get("/api/v1/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     active = classifier_instance.classifier is not None
     return HealthResponse(
